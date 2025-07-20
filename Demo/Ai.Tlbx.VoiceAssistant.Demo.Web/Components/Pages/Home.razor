@@ -38,11 +38,11 @@
                                 <!-- Voice Selection -->
                                 <div>
                                     <label for="voiceSelect" class="block text-xs font-medium text-gray-600 mb-1">Voice</label>
-                                    <VoiceSelect SelectedVoice="@currentVoiceString" SelectedVoiceChanged="OnVoiceChanged" Disabled="@voiceAssistant.IsConnecting" />
+                                    <VoiceSelect SelectedVoice="@currentVoiceString" SelectedVoiceChanged="OnVoiceChanged" Disabled="@(voiceAssistant.IsConnecting || voiceAssistant.IsRecording)" />
                                 </div>
 
                                 <!-- Voice Speed -->
-                                <VoiceSpeedSlider SelectedSpeed="@currentVoiceSpeed" SelectedSpeedChanged="OnVoiceSpeedChanged" Disabled="@voiceAssistant.IsConnecting" />
+                                <VoiceSpeedSlider SelectedSpeed="@currentVoiceSpeed" SelectedSpeedChanged="OnVoiceSpeedChanged" Disabled="@(voiceAssistant.IsConnecting || voiceAssistant.IsRecording)" />
 
                                 <!-- Microphone Selection -->
                                 <div>
@@ -50,7 +50,8 @@
                                     <MicrophoneSelect AvailableMicrophones="availableMicrophones" 
                                                      @bind-SelectedMicrophoneId="selectedMicrophoneId" 
                                                      MicPermissionGranted="micPermissionGranted" 
-                                                     OnRequestPermission="RequestMicrophonePermission" />
+                                                     OnRequestPermission="RequestMicrophonePermission" 
+                                                     Disabled="@(voiceAssistant.IsConnecting || voiceAssistant.IsRecording)" />
                                 </div>
 
                                 <!-- Options -->
@@ -65,14 +66,14 @@
                                 <div class="space-y-2">
                                     <button class="w-full py-2 px-3 rounded-md bg-gray-600 text-white text-sm font-medium hover:bg-gray-700 transition-colors flex items-center justify-center"
                                     @onclick="ClearChat"
-                                    disabled="@(voiceAssistant.IsConnecting)">
+                                    disabled="@(voiceAssistant.IsConnecting || voiceAssistant.IsRecording)">
                                         <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1.5" viewBox="0 0 20 20" fill="currentColor">
                                             <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" />
                                         </svg>
                                         Clear Chat
                                     </button>
 
-                                    <MicTestWidget OnStartTest="TestMicrophone" Loading="voiceAssistant.IsMicrophoneTesting || voiceAssistant.IsConnecting" />
+                                    <MicTestWidget OnStartTest="TestMicrophone" Loading="voiceAssistant.IsMicrophoneTesting || voiceAssistant.IsConnecting || voiceAssistant.IsRecording" />
                                 </div>
 
                                 <!-- Status -->

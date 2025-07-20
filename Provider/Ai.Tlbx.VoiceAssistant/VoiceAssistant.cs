@@ -133,6 +133,38 @@ namespace Ai.Tlbx.VoiceAssistant
                     await _provider.ConnectAsync(settings);
                     _isInitialized = true;
                     _isConnecting = false;
+                    
+                    // Inject conversation history if available
+                    var history = _chatHistory.GetMessages();
+                    if (history.Any())
+                    {
+                        // Only inject messages up to pairs (user + assistant responses)
+                        // This prevents the AI from continuing the last assistant message
+                        var messagesToInject = new List<ChatMessage>();
+                        for (int i = 0; i < history.Count; i++)
+                        {
+                            messagesToInject.Add(history[i]);
+                            // Stop if we've added a complete pair (user + assistant)
+                            if (i > 0 && i % 2 == 1)
+                            {
+                                // We've added a user and assistant message pair
+                            }
+                        }
+                        
+                        // If the last message is from the assistant, exclude it
+                        // This prevents the AI from continuing where it left off
+                        if (messagesToInject.Count > 0 && 
+                            messagesToInject[messagesToInject.Count - 1].Role == ChatMessage.AssistantRole)
+                        {
+                            messagesToInject.RemoveAt(messagesToInject.Count - 1);
+                        }
+                        
+                        if (messagesToInject.Any())
+                        {
+                            _logAction(LogLevel.Info, $"Injecting {messagesToInject.Count} messages from conversation history (excluded last assistant message if any)");
+                            await _provider.InjectConversationHistoryAsync(messagesToInject);
+                        }
+                    }
                 }
                 
                 cancellationToken.ThrowIfCancellationRequested();

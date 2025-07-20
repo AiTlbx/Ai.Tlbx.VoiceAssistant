@@ -549,8 +549,16 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Web
                 CleanupRecording();
                 return true; // Pretend success since we can't actually verify
             }
-            catch (Exception)
+            catch (JSException jsEx)
             {
+                // Handle JavaScript errors gracefully (e.g., if audio context is already closed)
+                Log(LogLevel.Warn, $"JavaScript error during stop recording: {jsEx.Message}");
+                CleanupRecording();
+                return true; // Consider it stopped
+            }
+            catch (Exception ex)
+            {
+                Log(LogLevel.Error, $"Unexpected error stopping recording: {ex.Message}");
                 CleanupRecording();
                 return false;
             }

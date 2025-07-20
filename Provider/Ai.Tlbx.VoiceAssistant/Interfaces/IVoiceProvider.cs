@@ -39,6 +39,13 @@ namespace Ai.Tlbx.VoiceAssistant.Interfaces
         /// <returns>A task representing the interrupt operation.</returns>
         Task SendInterruptAsync();
         
+        /// <summary>
+        /// Injects conversation history into the current session.
+        /// </summary>
+        /// <param name="messages">The conversation history to inject.</param>
+        /// <returns>A task representing the injection operation.</returns>
+        Task InjectConversationHistoryAsync(IEnumerable<ChatMessage> messages);
+        
         // Provider → Orchestrator callbacks
         /// <summary>
         /// Callback invoked when a message is received from the AI provider.

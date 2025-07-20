@@ -232,6 +232,61 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.OpenAi
                 OnError?.Invoke($"Interrupt error: {ex.Message}");
             }
         }
+        
+        /// <summary>
+        /// Injects conversation history into the current session.
+        /// </summary>
+        /// <param name="messages">The conversation history to inject.</param>
+        /// <returns>A task representing the injection operation.</returns>
+        public async Task InjectConversationHistoryAsync(IEnumerable<ChatMessage> messages)
+        {
+            if (!IsConnected)
+            {
+                _logAction(LogLevel.Warn, "Cannot inject conversation history: not connected");
+                return;
+            }
+            
+            try
+            {
+                foreach (var message in messages)
+                {
+                    // Skip tool messages as they need special handling
+                    if (message.Role == ChatMessage.ToolRole)
+                        continue;
+                    
+                    var conversationItem = new
+                    {
+                        type = "conversation.item.create",
+                        item = new
+                        {
+                            type = "message",
+                            role = message.Role == ChatMessage.UserRole ? "user" : "assistant",
+                            content = new[]
+                            {
+                                new
+                                {
+                                    type = "input_text",
+                                    text = message.Content
+                                }
+                            }
+                        }
+                    };
+                    
+                    await SendMessageAsync(JsonSerializer.Serialize(conversationItem));
+                    _logAction(LogLevel.Info, $"Injected {message.Role} message into conversation");
+                    
+                    // Small delay to avoid overwhelming the API
+                    await Task.Delay(50);
+                }
+                
+                _logAction(LogLevel.Info, $"Successfully injected {messages.Count()} messages into conversation history");
+            }
+            catch (Exception ex)
+            {
+                _logAction(LogLevel.Error, $"Error injecting conversation history: {ex.Message}");
+                throw;
+            }
+        }
 
         private async Task SendSessionConfigurationAsync()
         {
