@@ -6,21 +6,40 @@ class AudioRecorderProcessor extends AudioWorkletProcessor {
         this.buffer = new Int16Array(4096);
         this.bufferIndex = 0;
         this.isActive = true;
+        this.isStopping = false;
+        this.stopCountdown = 0;
         
         // Listen for messages from the main thread
         this.port.onmessage = (event) => {
             if (event.data?.command === 'stop') {
-                console.log("[AudioProcessor] Received stop command");
-                this.isActive = false;
+                console.log("[AudioProcessor] Received stop command, initiating graceful shutdown");
+                this.isStopping = true;
+                // Process a few more frames before stopping (128 samples @ 48kHz = ~2.7ms)
+                this.stopCountdown = 3;
             }
         };
     }
 
     process(inputs, outputs) {
-        // If we've been told to stop, return false to terminate the processor
-        if (!this.isActive) {
-            console.log("[AudioProcessor] Stopping processor");
-            return false;
+        // Handle graceful shutdown
+        if (this.isStopping) {
+            if (this.stopCountdown > 0) {
+                this.stopCountdown--;
+                // Flush any remaining data in buffer
+                if (this.bufferIndex > 0 && this.stopCountdown === 0) {
+                    // Send the final partial buffer
+                    this.port.postMessage({
+                        audioData: this.buffer.slice(0, this.bufferIndex)
+                    });
+                    this.bufferIndex = 0;
+                }
+            } else {
+                console.log("[AudioProcessor] Graceful shutdown complete");
+                // Send confirmation that processor is stopping
+                this.port.postMessage({ stopped: true });
+                this.isActive = false;
+                return false; // Terminate processor
+            }
         }
         
         // Get the first channel of the first input
@@ -78,6 +97,12 @@ class PlaybackProcessor extends AudioWorkletProcessor {
         this._crossfadeBuffer = new Float32Array(CROSSFADE_SAMPLES).fill(0);
         this._isCrossfadingIn = false;
         this._crossfadeIndex = 0;
+        
+        // Audio enhancement state
+        this._prevSample = 0; // For interpolation
+        this._eqHistory = new Float32Array(4).fill(0); // For simple EQ
+        this._noiseGate = 0.002; // Simple noise gate threshold
+        this._enhancementEnabled = false; // Disabled by default for stability
 
         this.port.onmessage = (event) => {
             if (event.data.command === 'stop') {
@@ -96,6 +121,10 @@ class PlaybackProcessor extends AudioWorkletProcessor {
                  this._crossfadeIndex = 0;
                  this._isCrossfadingIn = false;
                  this._crossfadeBuffer.fill(0);
+                 this._buffer.fill(0); // Clear the entire buffer
+            } else if (event.data.command === 'setEnhancement') {
+                this._enhancementEnabled = !!event.data.enabled;
+                console.log('[PlaybackProcessor] Audio enhancement:', this._enhancementEnabled ? 'enabled' : 'disabled');
             }
              else if (event.data.audioData) {
                 this._handleAudioData(event.data.audioData);
@@ -140,11 +169,69 @@ class PlaybackProcessor extends AudioWorkletProcessor {
         const fadeInGain = index / totalSamples;
         return (fadeOutBuffer[index] * fadeOutGain) + (sample * fadeInGain);
     }
+    
+    // Audio enhancement: Simple interpolation for smoother playback
+    _interpolate(currentSample) {
+        // Linear interpolation between samples
+        const interpolated = (this._prevSample + currentSample) * 0.5;
+        this._prevSample = currentSample;
+        return interpolated;
+    }
+    
+    // Audio enhancement: Simple voice EQ (boosts mid frequencies for clarity)
+    _applyVoiceEQ(sample) {
+        // Simplified one-pole filter for voice enhancement
+        // This is more stable and compatible
+        const alpha = 0.15; // Filter coefficient
+        const boost = 1.1; // Slight boost factor
+        
+        // Apply simple high-pass to remove DC and boost mids
+        const filtered = sample - this._eqHistory[0];
+        this._eqHistory[0] = this._eqHistory[0] + alpha * filtered;
+        
+        return sample + (filtered * boost * 0.3);
+    }
+    
+    // Audio enhancement: Simple de-emphasis filter to reduce harshness
+    _applyDeEmphasis(sample) {
+        // Gentle high-frequency roll-off
+        const alpha = 0.85;
+        return sample * (1 - alpha) + this._prevSample * alpha;
+    }
+    
+    // Audio enhancement: Process sample through enhancement chain
+    _enhanceAudio(sample) {
+        // Apply noise gate
+        if (Math.abs(sample) < this._noiseGate) {
+            sample = 0;
+        }
+        
+        // Apply voice EQ for clarity
+        sample = this._applyVoiceEQ(sample);
+        
+        // Apply de-emphasis to reduce harshness
+        sample = this._applyDeEmphasis(sample);
+        
+        // Simple clipping protection
+        if (sample > 1.0) {
+            sample = 1.0;
+        } else if (sample < -1.0) {
+            sample = -1.0;
+        }
+        
+        return sample;
+    }
 
 
     process(inputs, outputs, parameters) {
         const output = outputs[0];
         const channel = output[0]; // mono
+
+        // If we're stopped or have no channel, output silence
+        if (!channel || this._isStopping) {
+            if (channel) channel.fill(0);
+            return true;
+        }
 
         // Decide whether we should start or pause playback based on buffer level
         if (!this._isPlaying) {
@@ -175,6 +262,11 @@ class PlaybackProcessor extends AudioWorkletProcessor {
                  }
 
 
+                // Apply audio enhancement if enabled
+                if (this._enhancementEnabled) {
+                    sample = this._enhanceAudio(sample);
+                }
+                
                 channel[i] = sample;
                 this._readIndex = (this._readIndex + 1) % BUFFER_SIZE;
                 this._bufferFill--;

@@ -29,6 +29,12 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.OpenAi.Models
         public AssistantVoice Voice { get; set; } = AssistantVoice.Alloy;
 
         /// <summary>
+        /// The speed of the AI model's spoken response.
+        /// OpenAI supports 0.25 to 1.5, where 1.0 is normal speed.
+        /// </summary>
+        public double TalkingSpeed { get; set; } = 1.0;
+
+        /// <summary>
         /// The temperature setting for response generation (0.0 to 1.0).
         /// </summary>
         public double Temperature { get; set; } = 0.7;

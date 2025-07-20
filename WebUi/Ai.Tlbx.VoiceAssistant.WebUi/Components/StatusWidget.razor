@@ -1,17 +1,21 @@
 @page "/status"
 
-<h3>Status and Errors</h3>
-
-<div class="status-container">
-    <div class="status-message" style="color: @(StatusColor)">@CurrentStatus</div>
-    @if (!string.IsNullOrEmpty(ErrorMessage))
-    {
-        <div class="error-message">Error: @ErrorMessage</div>
-    }
-    @if (IsMicrophoneTesting)
-    {
-        <div class="mic-testing-message">Microphone Testing in Progress...</div>
-    }
+<div class="border-t pt-3">
+    <label class="block text-xs font-medium text-gray-600 mb-1">Status</label>
+    <div class="text-xs px-2 py-1 rounded @(GetStatusClasses())">
+        @if (IsMicrophoneTesting)
+        {
+            <span>Testing microphone...</span>
+        }
+        else if (!string.IsNullOrEmpty(ErrorMessage))
+        {
+            <span>@ErrorMessage</span>
+        }
+        else
+        {
+            <span>@(string.IsNullOrEmpty(CurrentStatus) ? "Ready" : CurrentStatus)</span>
+        }
+    </div>
 </div>
 
 @code {
@@ -54,5 +58,15 @@
         {
             _statusColor = "red";
         }
+    }
+    
+    private string GetStatusClasses()
+    {
+        if (!string.IsNullOrEmpty(ErrorMessage))
+            return "bg-red-50 text-red-700";
+        else if (IsMicrophoneTesting)
+            return "bg-blue-50 text-blue-700";
+        else
+            return "bg-gray-50 text-gray-700";
     }
 }

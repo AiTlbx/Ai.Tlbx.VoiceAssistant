@@ -2,32 +2,52 @@
 @using Ai.Tlbx.VoiceAssistant
 @using Ai.Tlbx.VoiceAssistant.Models
 
-<div class="chat-container">
-    <div class="chat-messages">
-        @if (VoiceAssistant != null)
+<div class="w-full">
+    @if (VoiceAssistant != null)
+    {
+        @foreach (var message in VoiceAssistant.ChatHistory)
         {
-            @foreach (var message in VoiceAssistant.ChatHistory)
-            {
-                <div class="chat-message @(GetMessageType(message))">
+            <div class="mb-3 @(GetMessageAlignment(message))">
+                <div class="@(GetMessageClasses(message))">
                     @if (message.Role == ChatMessage.ToolRole)
                     {
-                        <span class="tool-call">[Tool: @message.ToolName] @message.Content</span>
+                        <div class="text-xs font-medium mb-1 text-purple-700">Tool: @message.ToolName</div>
+                        <div class="text-sm">@message.Content</div>
                     }
                     else
                     {
-                        <span>@message.Content</span>
+                        <div class="text-sm">@message.Content</div>
                     }
                 </div>
-            }
+            </div>
         }
-    </div>
+    }
 </div>
 
 @code {
     [CascadingParameter] protected VoiceAssistant? VoiceAssistant { get; set; }
     
-    private string GetMessageType(ChatMessage message)
+    private string GetMessageAlignment(ChatMessage message)
     {
-        return message.Role.ToLower();
+        return message.Role switch
+        {
+            ChatMessage.UserRole => "flex justify-end",
+            ChatMessage.AssistantRole => "flex justify-start",
+            ChatMessage.ToolRole => "flex justify-center",
+            _ => "flex justify-start"
+        };
+    }
+    
+    private string GetMessageClasses(ChatMessage message)
+    {
+        var baseClasses = "inline-block max-w-[70%] px-3 py-2 rounded-lg border";
+        
+        return message.Role switch
+        {
+            ChatMessage.UserRole => $"{baseClasses} bg-blue-50 border-blue-200 text-blue-900",
+            ChatMessage.AssistantRole => $"{baseClasses} bg-gray-50 border-gray-200 text-gray-900",
+            ChatMessage.ToolRole => $"{baseClasses} bg-purple-50 border-purple-200 text-purple-900 max-w-[85%]",
+            _ => $"{baseClasses} bg-gray-50 border-gray-200"
+        };
     }
 }

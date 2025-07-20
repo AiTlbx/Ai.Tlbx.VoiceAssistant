@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Important Shell Commands
 
-## Common Development Commands
+### Common Development Commands
 
 Build the entire solution:
 ```bash
@@ -41,6 +41,16 @@ pwsh publish-nuget.ps1
 Deep clean of bin/obj folders:
 ```bash
 cleanBinObj.cmd
+```
+
+Publish without version increment:
+```bash
+pwsh publish-nuget-current-version.ps1
+```
+
+Sign NuGet packages (requires certificate):
+```bash
+pwsh sign-packages.ps1 -CertPath "path/to/cert.pfx" -CertPassword "password"
 ```
 
 ## High-Level Architecture (v4.0)
@@ -124,3 +134,5 @@ Always use `Action<LogLevel, string>` for logging delegation and forward logs up
 - Linux components require libasound (ALSA) to be installed
 - Web components require HTTPS or localhost for microphone access due to browser security
 - JavaScript audio worklet processors handle real-time audio processing in web implementation
+- Solution uses the new .slnx format (TLBX.Ai.VoiceAssistant.slnx)
+- Publishing requires NUGET_API_KEY environment variable for NuGet.org uploads

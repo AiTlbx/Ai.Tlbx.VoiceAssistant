@@ -15,5 +15,11 @@ namespace Ai.Tlbx.VoiceAssistant.Interfaces
         /// List of tools available to the AI assistant.
         /// </summary>
         List<IVoiceTool> Tools { get; set; }
+        
+        /// <summary>
+        /// The speed of the AI model's spoken response.
+        /// Typical range is 0.25 to 1.5, where 1.0 is normal speed.
+        /// </summary>
+        double TalkingSpeed { get; set; }
     }
 }

@@ -25,6 +25,9 @@ namespace Ai.Tlbx.VoiceAssistant
         private string? _lastErrorMessage = null;
         private string _connectionStatus = string.Empty;
         
+        // Static cache for generated beeps (lazy-initialized)
+        private static readonly Dictionary<(int frequency, int duration, int sampleRate), string> _beepCache = new();
+        
         // UI Callbacks - Direct actions for simple 1:1 communication
         /// <summary>
         /// Callback that fires when the connection status changes.
@@ -209,21 +212,34 @@ namespace Ai.Tlbx.VoiceAssistant
         }
 
         /// <summary>
-        /// Tests the microphone by recording a brief sample and checking for audio data.
+        /// Tests the microphone by recording a brief sample and playing it back.
         /// </summary>
         /// <returns>A task representing the microphone test operation.</returns>
         public async Task<bool> TestMicrophoneAsync()
         {
+            List<string> recordedAudioChunks = new List<string>();
+            
             try
             {
                 _isMicrophoneTesting = true;
-                ReportStatus("Testing microphone...");
+                ReportStatus("Testing speakers...");
                 
                 // Initialize audio hardware first
                 await _hardwareAccess.InitAudio();
                 
-                // Start a brief recording session to test the microphone
-                bool testRecordingStarted = await _hardwareAccess.StartRecordingAudio(OnTestAudioDataReceived);
+                // Play initial beep to test speakers (440 Hz for 200ms)
+                _logAction(LogLevel.Info, "Playing initial beep to test speakers");
+                _hardwareAccess.PlayAudio(GenerateBeep(440, 200), 24000);
+                await Task.Delay(300); // Wait a bit after beep
+                
+                ReportStatus("Testing microphone - recording...");
+                
+                // Start recording with a callback that collects audio chunks
+                bool testRecordingStarted = await _hardwareAccess.StartRecordingAudio((sender, e) =>
+                {
+                    recordedAudioChunks.Add(e.Base64EncodedPcm16Audio);
+                    _logAction(LogLevel.Info, $"Test audio chunk received: {e.Base64EncodedPcm16Audio.Length} chars");
+                });
                 
                 if (!testRecordingStarted)
                 {
@@ -231,13 +247,38 @@ namespace Ai.Tlbx.VoiceAssistant
                     return false;
                 }
                 
-                // Let it record for a few seconds
-                await Task.Delay(3000);
+                // Record for 5 seconds
+                await Task.Delay(5000);
                 
-                // Stop the test recording
+                // Stop recording
                 await _hardwareAccess.StopRecordingAudio();
                 
-                ReportStatus("Microphone test completed");
+                // Play end-of-recording beep (880 Hz for 200ms - higher pitch)
+                _logAction(LogLevel.Info, "Playing end-of-recording beep");
+                _hardwareAccess.PlayAudio(GenerateBeep(880, 200), 24000);
+                await Task.Delay(300); // Wait a bit after beep
+                
+                if (recordedAudioChunks.Count == 0)
+                {
+                    ReportStatus("Microphone test failed: No audio data received");
+                    return false;
+                }
+                
+                ReportStatus("Playing back recorded audio...");
+                _logAction(LogLevel.Info, $"Playing back {recordedAudioChunks.Count} audio chunks");
+                
+                // Play back all recorded chunks
+                foreach (var audioChunk in recordedAudioChunks)
+                {
+                    _hardwareAccess.PlayAudio(audioChunk, 24000);
+                }
+                
+                // Play final success beep (660 Hz for 300ms)
+                await Task.Delay(200); // Small pause before final beep
+                _logAction(LogLevel.Info, "Playing success beep");
+                _hardwareAccess.PlayAudio(GenerateBeep(660, 300), 24000);
+                
+                ReportStatus("Microphone test completed successfully");
                 _logAction(LogLevel.Info, "Microphone test completed successfully");
                 return true;
             }
@@ -252,6 +293,64 @@ namespace Ai.Tlbx.VoiceAssistant
             {
                 _isMicrophoneTesting = false;
             }
+        }
+
+        /// <summary>
+        /// Generates a simple sine wave beep as base64 encoded PCM audio.
+        /// </summary>
+        /// <param name="frequency">The frequency of the beep in Hz.</param>
+        /// <param name="durationMs">The duration of the beep in milliseconds.</param>
+        /// <param name="sampleRate">The sample rate in Hz (default 24000).</param>
+        /// <returns>Base64 encoded PCM16 audio data.</returns>
+        private string GenerateBeep(int frequency = 440, int durationMs = 200, int sampleRate = 24000)
+        {
+            // Check cache first
+            var cacheKey = (frequency, durationMs, sampleRate);
+            if (_beepCache.TryGetValue(cacheKey, out var cachedBeep))
+            {
+                return cachedBeep;
+            }
+            
+            // Ensure frequency is below Nyquist frequency to prevent aliasing
+            if (frequency > sampleRate / 2)
+            {
+                _logAction(LogLevel.Warn, $"Beep frequency {frequency}Hz exceeds Nyquist limit for {sampleRate}Hz sample rate");
+                frequency = sampleRate / 2 - 100; // Set to just below Nyquist
+            }
+            
+            int numSamples = (sampleRate * durationMs) / 1000;
+            byte[] pcmData = new byte[numSamples * 2]; // 16-bit PCM = 2 bytes per sample
+            
+            // Fade in/out duration (5ms each)
+            int fadeSamples = (sampleRate * 5) / 1000;
+            fadeSamples = Math.Min(fadeSamples, numSamples / 4); // Don't fade more than 25% of the signal
+            
+            for (int i = 0; i < numSamples; i++)
+            {
+                double angle = 2.0 * Math.PI * frequency * i / sampleRate;
+                double amplitude = 16000; // Base amplitude
+                
+                // Apply fade-in envelope
+                if (i < fadeSamples)
+                {
+                    amplitude *= (double)i / fadeSamples;
+                }
+                // Apply fade-out envelope
+                else if (i >= numSamples - fadeSamples)
+                {
+                    amplitude *= (double)(numSamples - i) / fadeSamples;
+                }
+                
+                short sample = (short)(Math.Sin(angle) * amplitude);
+                
+                // Convert to little-endian bytes
+                pcmData[i * 2] = (byte)(sample & 0xFF);
+                pcmData[i * 2 + 1] = (byte)((sample >> 8) & 0xFF);
+            }
+            
+            var beepData = Convert.ToBase64String(pcmData);
+            _beepCache[cacheKey] = beepData; // Cache for future use
+            return beepData;
         }
 
         /// <summary>
@@ -360,11 +459,6 @@ namespace Ai.Tlbx.VoiceAssistant
             }
         }
 
-        private void OnTestAudioDataReceived(object sender, MicrophoneAudioReceivedEventArgs e)
-        {
-            // During microphone testing, just log that we received audio data
-            _logAction(LogLevel.Info, $"Test audio data received: {e.Base64EncodedPcm16Audio.Length} chars");
-        }
 
         private void ReportStatus(string status)
         {

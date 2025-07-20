@@ -1,14 +1,23 @@
 @page "/mictest"
 
-<h3>Microphone Test</h3>
-
-<div class="mic-test-container">
+<div class="w-full">
     @if (Loading)
     {
-        <div class="spinner">Loading...</div>
+        <div class="flex items-center justify-center py-3">
+            <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+            <span class="ml-3 text-gray-600 text-sm">Testing microphone...</span>
+        </div>
     }
-    <button @onclick="StartTest">Start Test</button>
-    <div class="mic-level">Level: @MicLevel</div>
+    else
+    {
+        <button @onclick="StartTest"
+                class="w-full py-2 px-3 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors flex items-center justify-center">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+            </svg>
+            Test Mic
+        </button>
+    }
 </div>
 
 @code {

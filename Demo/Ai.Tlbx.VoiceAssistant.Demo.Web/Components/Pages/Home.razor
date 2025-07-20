@@ -5,6 +5,8 @@
 @using Ai.Tlbx.VoiceAssistant.WebUi.Components
 @using Ai.Tlbx.VoiceAssistant.Demo.Web
 @using Ai.Tlbx.VoiceAssistant.Models
+@using System.Diagnostics
+
 @rendermode InteractiveServer
 @inject VoiceAssistant voiceAssistant
 @inject IJSRuntime JS
@@ -14,97 +16,115 @@
 
 <CascadingValue Value="voiceAssistant">
     <CascadingValue Value="sessionSettings">
-        <div class="container mx-auto p-4">
-            <div class="flex flex-col lg:flex-row gap-4">
-                <!-- Controls Panel -->
-                <div class="lg:w-1/3">
-                    <div class="bg-white rounded-lg shadow-md p-4 mb-4">
-                        <h3 class="text-xl font-bold text-gray-800 mb-4">Voice Controls</h3>
-
-                        <div class="flex gap-2 mb-4">
-                            <AiTalkControl OnStartTalking="StartSession" OnStopTalking="StopSession" IsTalking="voiceAssistant.IsRecording" Loading="voiceAssistant.IsConnecting || voiceAssistant.IsRecording" />
-                        </div>
-
-                        <div class="mb-4">
-                            <label for="voiceSelect" class="block text-sm font-medium text-gray-700 mb-1">Assistant Voice</label>
-                            <VoiceSelect SelectedVoice="@currentVoiceString" SelectedVoiceChanged="OnVoiceChanged" Disabled="@voiceAssistant.IsConnecting" />
-                        </div>
-
-                        <!-- Microphone selection dropdown -->
-                        <div class="mb-4">
-                            <MicrophoneSelect AvailableMicrophones="availableMicrophones" 
-                                             SelectedMicrophoneId="selectedMicrophoneId" 
-                                             MicPermissionGranted="micPermissionGranted" 
-                                             OnRequestPermission="RequestMicrophonePermission" />
-                        </div>
-
-                        <div class="mb-4 flex items-center">
-                            <input type="checkbox" id="timeToolCheck" class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 mr-2" 
-                            @bind="useTimeTool" 
-                            disabled="@voiceAssistant.IsRecording"> 
-                            <label for="timeToolCheck" class="text-sm font-medium text-gray-700">Enable Current Time Tool</label>
-                        </div>
-
-                        <div class="mt-4">
-                            <button class="w-full py-2 px-4 rounded-md bg-gray-200 text-gray-800 font-medium hover:bg-gray-300 transition-colors flex items-center justify-center"
-                            @onclick="ClearChat"
-                            disabled="@(voiceAssistant.IsConnecting)">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                                    <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" />
-                                </svg>
-                                Clear Chat
-                            </button>
-                        </div>
-
-                        <div class="mt-4">
-                            <MicTestWidget OnStartTest="TestMicrophone" Loading="voiceAssistant.IsMicrophoneTesting || voiceAssistant.IsConnecting" />
-                        </div>
-
-                        <div class="mb-4">
-                            <StatusWidget ConnectionStatus="voiceAssistant.ConnectionStatus" Error="voiceAssistant.LastErrorMessage" IsMicrophoneTesting="voiceAssistant.IsMicrophoneTesting" />
-                        </div>
-
-                        <div class="mt-4">
-                            <DiagnosticsWidget @ref="diagnosticsWidget" InitiallyExpanded="false" 
-                                               BufferLevel="0" 
-                                               Latency="0" 
-                                               SampleRate="24000" 
-                                               AudioChunksProcessed="0" />
-                        </div>
-                    </div>
+        <div class="min-h-screen bg-gray-50 p-3">
+            <div class="max-w-7xl mx-auto">
+                <!-- Page Header -->
+                <div class="mb-3">
+                    <h1 class="text-xl font-semibold text-gray-900">AI Voice Chat</h1>
                 </div>
 
-                <!-- Chat Panel -->
-                <div class="lg:w-2/3">
-                    <div class="bg-white rounded-lg shadow-md h-[600px] flex flex-col">
-                        <div class="p-4 border-b border-gray-200">
-                            <h3 class="text-xl font-bold text-gray-800">Conversation</h3>
-                        </div>
+                <div class="flex flex-col lg:flex-row gap-3">
+                    <!-- Controls Panel -->
+                    <div class="lg:w-1/3">
+                        <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+                            <div class="border-b border-gray-200 px-3 py-2">
+                                <h3 class="text-sm font-medium text-gray-700">Controls</h3>
+                            </div>
 
-                        <div class="flex-1 p-4 overflow-y-auto space-y-4" id="chat-messages" @ref="chatContainer">
-                            <ChatWidget />
-                        </div>
+                            <div class="p-3 space-y-3">
+                                <!-- Talk Button -->
+                                <AiTalkControl OnStartTalking="StartSession" OnStopTalking="StopSession" IsTalking="voiceAssistant.IsRecording" Loading="voiceAssistant.IsConnecting || voiceAssistant.IsRecording" />
 
-                        <div class="p-3 border-t border-gray-200 bg-gray-50 text-sm text-gray-600">
-                            @if (voiceAssistant.IsRecording)
-                            {
-                                <div class="flex items-center">
-                                    <div class="relative h-3 w-3 mr-2">
-                                        <span class="animate-ping absolute h-3 w-3 rounded-full bg-red-400 opacity-75"></span>
-                                        <span class="absolute h-3 w-3 rounded-full bg-red-500"></span>
-                                    </div>
-                                    <span>Listening... Just speak naturally.</span>
+                                <!-- Voice Selection -->
+                                <div>
+                                    <label for="voiceSelect" class="block text-xs font-medium text-gray-600 mb-1">Voice</label>
+                                    <VoiceSelect SelectedVoice="@currentVoiceString" SelectedVoiceChanged="OnVoiceChanged" Disabled="@voiceAssistant.IsConnecting" />
                                 </div>
-                            }
-                            else
-                            {
-                                <span>Click Start to begin recording</span>
-                            }
+
+                                <!-- Voice Speed -->
+                                <VoiceSpeedSlider SelectedSpeed="@currentVoiceSpeed" SelectedSpeedChanged="OnVoiceSpeedChanged" Disabled="@voiceAssistant.IsConnecting" />
+
+                                <!-- Microphone Selection -->
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-600 mb-1">Microphone</label>
+                                    <MicrophoneSelect AvailableMicrophones="availableMicrophones" 
+                                                     SelectedMicrophoneId="selectedMicrophoneId" 
+                                                     MicPermissionGranted="micPermissionGranted" 
+                                                     OnRequestPermission="RequestMicrophonePermission" />
+                                </div>
+
+                                <!-- Options -->
+                                <div class="flex items-center">
+                                    <input type="checkbox" id="timeToolCheck" class="h-3 w-3 text-blue-600 border-gray-300 rounded focus:ring-1 focus:ring-blue-500 mr-2" 
+                                    @bind="useTimeTool" 
+                                    disabled="@voiceAssistant.IsRecording"> 
+                                    <label for="timeToolCheck" class="text-xs text-gray-600 cursor-pointer">Enable time tool</label>
+                                </div>
+
+                                <!-- Action Buttons -->
+                                <div class="space-y-2">
+                                    <button class="w-full py-2 px-3 rounded-md bg-gray-600 text-white text-sm font-medium hover:bg-gray-700 transition-colors flex items-center justify-center"
+                                    @onclick="ClearChat"
+                                    disabled="@(voiceAssistant.IsConnecting)">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1.5" viewBox="0 0 20 20" fill="currentColor">
+                                            <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" />
+                                        </svg>
+                                        Clear Chat
+                                    </button>
+
+                                    <MicTestWidget OnStartTest="TestMicrophone" Loading="voiceAssistant.IsMicrophoneTesting || voiceAssistant.IsConnecting" />
+                                </div>
+
+                                <!-- Status -->
+                                <div>
+                                    <StatusWidget ConnectionStatus="@voiceAssistant.ConnectionStatus" Error="@voiceAssistant.LastErrorMessage" IsMicrophoneTesting="@voiceAssistant.IsMicrophoneTesting" />
+                                </div>
+
+                                <!-- Connection Events -->
+                                @if (!string.IsNullOrEmpty(lastConnectionEvent))
+                                {
+                                    <div class="border-t pt-3">
+                                        <label class="block text-xs font-medium text-gray-600 mb-1">Last Event</label>
+                                        <div class="text-xs text-gray-700 bg-gray-50 rounded px-2 py-1">
+                                            @lastConnectionEvent
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Chat Panel -->
+                    <div class="lg:w-2/3">
+                        <div class="bg-white rounded-lg shadow-sm border border-gray-200 h-[500px] flex flex-col overflow-hidden">
+                            <div class="border-b border-gray-200 px-3 py-2">
+                                <h3 class="text-sm font-medium text-gray-700">Conversation</h3>
+                            </div>
+
+                            <div class="flex-1 p-3 overflow-y-auto bg-gray-50" id="chat-messages" @ref="chatContainer">
+                                <ChatWidget />
+                            </div>
+
+                            <div class="px-3 py-2 border-t border-gray-200 bg-white">
+                                @if (voiceAssistant.IsRecording)
+                                {
+                                    <div class="flex items-center text-red-600 text-sm">
+                                        <div class="relative h-2 w-2 mr-2">
+                                            <span class="animate-ping absolute h-2 w-2 rounded-full bg-red-400 opacity-75"></span>
+                                            <span class="absolute h-2 w-2 rounded-full bg-red-500"></span>
+                                        </div>
+                                        <span>Listening...</span>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <span class="text-gray-500 text-sm">Ready</span>
+                                }
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
-            <ToastNotification @ref="toastNotification" />
         </div>
     </CascadingValue>
 </CascadingValue>
@@ -114,6 +134,7 @@
     private ElementReference chatContainer;
     private string currentVoiceString = string.Empty;
     private AssistantVoice currentVoice = AssistantVoice.Alloy;
+    private double currentVoiceSpeed = 1.0;
     private bool useTimeTool = true;
     
     // Microphone selection related fields
@@ -122,17 +143,13 @@
     private bool micPermissionGranted = false;
 
     private SessionSettingsContext sessionSettings = new();
-    private ToastNotification? toastNotification;
-    private DiagnosticsWidget? diagnosticsWidget;
+    private string lastConnectionEvent = string.Empty;
 
     protected override async Task OnInitializedAsync()
     {
         voiceAssistant.OnConnectionStatusChanged = OnConnectionStatusChanged;
         voiceAssistant.OnMessageAdded = OnMessageAdded;
         voiceAssistant.OnMicrophoneDevicesChanged = OnMicrophoneDevicesChanged;
-        
-        // Listen for recording state changes
-        PropertyChanged += OnPropertyChanged;
 
         // Initialize the string value based on the current enum value
         // Note: CurrentVoice is not exposed by VoiceAssistant
@@ -143,30 +160,11 @@
         await Task.CompletedTask;
     }
     
-    // Simple property changed handler to detect recording state changes
-    private void OnPropertyChanged(object? sender, EventArgs e)
-    {
-        // Make sure to preserve mic permission state even when recording state changes
-        if (!micPermissionGranted && availableMicrophones.Count > 0)
-        {
-            micPermissionGranted = true;
-            InvokeAsync(StateHasChanged);
-        }
-    }
-    
     // Logging method using the centralized logging system
     private void Log(LogLevel level, string message)
     {
         // Direct logging is not exposed in VoiceAssistant
-        Console.WriteLine($"[{level}] [Home] {message}");
-    }
-    
-    // Simulate a property changed event for state monitoring
-    private event EventHandler? PropertyChanged;
-    
-    private void RaisePropertyChanged()
-    {
-        PropertyChanged?.Invoke(this, EventArgs.Empty);
+        Debug.WriteLine($"WebDemoLog: [{level}] [Home] {message}");
     }
 
     private async Task CheckMicrophonePermission()
@@ -367,6 +365,13 @@
         await Task.CompletedTask;
     }
 
+    private async Task OnVoiceSpeedChanged(double newSpeed)
+    {
+        currentVoiceSpeed = newSpeed;
+        sessionSettings = sessionSettings with { SelectedSpeed = newSpeed };
+        await Task.CompletedTask;
+    }
+
     private void OnMicrophoneDevicesChanged(List<AudioDeviceInfo> devices)
     {
         InvokeAsync(async () => 
@@ -384,13 +389,12 @@
 
     private void OnConnectionStatusChanged(string status)
     {
-        InvokeAsync(async () => 
+        InvokeAsync(() => 
         {
-            if (!string.IsNullOrEmpty(status) && toastNotification != null)
+            if (!string.IsNullOrEmpty(status))
             {
-                await toastNotification.ShowAsync(status, "Connection Status", ToastNotification.ToastType.Info);
+                lastConnectionEvent = $"{DateTime.Now:HH:mm:ss} - {status}";
             }
-            await Task.CompletedTask;
             StateHasChanged();
         });
     }
@@ -443,6 +447,7 @@
             {
                 Instructions = "You are a helpful AI assistant. Be friendly, conversational, helpful, and engaging.",
                 Voice = currentVoice,
+                TalkingSpeed = currentVoiceSpeed,
                 Model = "gpt-4o-realtime-preview-2025-06-03"
                 // Tools = tools
             };
@@ -472,7 +477,10 @@
             await voiceAssistant.StopAsync();
             
             // Ensure mic permission state is preserved after stopping
-            RaisePropertyChanged();
+            if (!micPermissionGranted && availableMicrophones.Count > 0)
+            {
+                micPermissionGranted = true;
+            }
             
             await InvokeAsync(StateHasChanged);
         }
@@ -526,7 +534,6 @@
         voiceAssistant.OnConnectionStatusChanged = null;
         voiceAssistant.OnMessageAdded = null;
         voiceAssistant.OnMicrophoneDevicesChanged = null;
-        PropertyChanged -= OnPropertyChanged;
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)

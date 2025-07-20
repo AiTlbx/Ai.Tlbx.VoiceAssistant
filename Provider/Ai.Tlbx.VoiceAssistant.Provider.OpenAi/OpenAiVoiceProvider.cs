@@ -244,6 +244,7 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.OpenAi
                 ["voice"] = _settings.Voice.ToString().ToLowerInvariant(),
                 ["instructions"] = _settings.Instructions,
                 ["temperature"] = _settings.Temperature,
+                ["speed"] = _settings.TalkingSpeed,
                 ["turn_detection"] = new
                 {
                     type = _settings.TurnDetection.Type,
@@ -533,6 +534,14 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.OpenAi
                 error.TryGetProperty("message", out var messageElement))
             {
                 var errorMessage = messageElement.GetString() ?? "Unknown error";
+                
+                // Don't report cancellation errors when there's no active response
+                if (errorMessage.Contains("Cannot cancel response", StringComparison.OrdinalIgnoreCase) && !_hasActiveResponse)
+                {
+                    _logAction(LogLevel.Info, $"Ignoring cancellation error - no active response: {errorMessage}");
+                    return;
+                }
+                
                 _logAction(LogLevel.Error, $"OpenAI API error: {errorMessage}");
                 OnError?.Invoke(errorMessage);
             }

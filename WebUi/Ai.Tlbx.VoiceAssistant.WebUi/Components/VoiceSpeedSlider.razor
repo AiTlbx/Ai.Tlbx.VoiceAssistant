@@ -1,0 +1,38 @@
+@using System.Globalization
+
+<div>
+    <label for="voiceSpeedSlider" class="block text-xs font-medium text-gray-600 mb-1">
+        Voice Speed: @SelectedSpeed.ToString("0.0", CultureInfo.InvariantCulture)x
+    </label>
+    <input type="range" 
+           id="voiceSpeedSlider"
+           min="0.25" 
+           max="1.5" 
+           step="0.05" 
+           value="@SelectedSpeed.ToString(CultureInfo.InvariantCulture)"
+           @onchange="@(e => OnSpeedChanged(e))"
+           disabled="@Disabled"
+           class="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600 disabled:opacity-50 disabled:cursor-not-allowed">
+    <div class="relative text-xs text-gray-500 mt-0.5">
+        <div class="flex justify-between">
+            <span>0.25x</span>
+            <span>1.5x</span>
+        </div>
+        <span class="absolute" style="left: 60%; transform: translateX(-50%);">1.0x</span>
+    </div>
+</div>
+
+@code {
+    [Parameter] public double SelectedSpeed { get; set; } = 1.0;
+    [Parameter] public EventCallback<double> SelectedSpeedChanged { get; set; }
+    [Parameter] public bool Disabled { get; set; } = false;
+
+    private async Task OnSpeedChanged(ChangeEventArgs e)
+    {
+        if (e.Value != null && double.TryParse(e.Value.ToString(), NumberStyles.Float, CultureInfo.InvariantCulture, out var speed))
+        {
+            SelectedSpeed = speed;
+            await SelectedSpeedChanged.InvokeAsync(speed);
+        }
+    }
+}

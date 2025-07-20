@@ -1,5 +1,6 @@
 ﻿// webAudioAccess.js
 let mediaStream = null;
+let mediaStreamSource = null;
 let audioWorkletNode = null;
 let playbackWorkletNode = null;
 let dotNetReference = null;
@@ -11,6 +12,7 @@ let playbackSampleRate = 24000;
 let playbackNodeConnected = false;
 let sessionCount = 0;
 let lastSessionDiagnostics = null;
+// Note: We properly stop streams when done - don't hog the microphone!
 
 // Diagnostic logging levels
 const DiagnosticLevel = {
@@ -556,17 +558,17 @@ async function startRecording(dotNetObj, intervalMs = 500, deviceId = null) {
 
     try {
         logNormal(`Attempting to get media stream for device: ${deviceId || 'default'}`);
-            const constraints = {
-                audio: {
-                    channelCount: 1,
+        const constraints = {
+            audio: {
+                channelCount: 1,
                 sampleRate: playbackSampleRate, // Use consistent rate
-                    echoCancellation: true,
-                    noiseSuppression: true,
+                echoCancellation: true,
+                noiseSuppression: true,
                 autoGainControl: true,
                 ...(deviceId && { deviceId: { exact: deviceId } }) // Apply specific device ID if provided
-                },
-                video: false
-            };
+            },
+            video: false
+        };
         
         logVerbose('getUserMedia constraints', constraints);
         mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
@@ -651,15 +653,15 @@ async function startRecording(dotNetObj, intervalMs = 500, deviceId = null) {
             }
         }, 1000); // Check every second
 
-        const source = audioContext.createMediaStreamSource(mediaStream);
-            source.connect(audioWorkletNode);
+        mediaStreamSource = audioContext.createMediaStreamSource(mediaStream);
+        mediaStreamSource.connect(audioWorkletNode);
         // Do NOT connect recorder worklet to destination
         // audioWorkletNode.connect(audioContext.destination); // NO! This would cause feedback
         
         isRecording = true;
         logNormal('Recording started successfully', {
             finalState: captureAudioState(),
-            sourceNodeChannelCount: source.channelCount
+            sourceNodeChannelCount: mediaStreamSource.channelCount
         });
         saveDiagnostics('recording_started');
         dotNetReference?.invokeMethodAsync('OnRecordingStateChanged', true); // Notify C#
@@ -686,6 +688,14 @@ async function startRecording(dotNetObj, intervalMs = 500, deviceId = null) {
             mediaStream.getTracks().forEach(track => track.stop());
             mediaStream = null;
         }
+        if (mediaStreamSource) {
+            try {
+                mediaStreamSource.disconnect();
+            } catch (e) {
+                // Ignore disconnect errors during cleanup
+            }
+            mediaStreamSource = null;
+        }
         // Don't null out audioWorkletNode here, it might be needed later
         logNormal('Recording start failed - cleaned up partial setup');
         return false;
@@ -702,11 +712,47 @@ async function stopRecording() {
         
     isRecording = false; // Set flag immediately
 
+     // Disconnect the audio graph in the correct order
+     if (mediaStreamSource) {
+         logNormal('Disconnecting MediaStreamSource');
+         try {
+             mediaStreamSource.disconnect();
+         } catch(e) {
+             logNormal('Error disconnecting MediaStreamSource', e);
+         }
+     }
+     
      // Signal the worklet processor to stop processing new audio and clean up
      if (audioWorkletNode) {
-         logNormal('Stopping and cleaning up AudioRecorderProcessor node');
+         logNormal('Initiating graceful stop of AudioRecorderProcessor node');
          try {
-              audioWorkletNode.port.postMessage({ command: 'stop' });
+              // Store the original onmessage handler
+              const originalHandler = audioWorkletNode.port.onmessage;
+              
+              // Wait for worklet to confirm it has stopped
+              const stopPromise = new Promise((resolve) => {
+                  audioWorkletNode.port.onmessage = (event) => {
+                      // Still process audio data if it comes
+                      if (originalHandler && event.data.audioData) {
+                          originalHandler(event);
+                      }
+                      // Check for stop confirmation
+                      if (event.data.stopped) {
+                          resolve();
+                      }
+                  };
+                  
+                  // Send stop command to processor
+                  audioWorkletNode.port.postMessage({ command: 'stop' });
+                  
+                  // Timeout after 200ms if no response
+                  setTimeout(resolve, 200);
+              });
+              
+              await stopPromise;
+              logNormal('AudioRecorderProcessor confirmed stopped');
+              
+              // Now disconnect
               audioWorkletNode.disconnect();
               audioWorkletNode = null; // Clear the reference so it gets recreated next time
          } catch(e) { 
@@ -714,15 +760,35 @@ async function stopRecording() {
          }
      }
 
-    // Stop the media stream tracks
+    // Add delay to let the audio subsystem settle
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    // Stop the media stream tracks properly with additional delay
     if (mediaStream) {
         logNormal('Stopping media stream tracks');
-        mediaStream.getTracks().forEach(track => track.stop());
+        const tracks = mediaStream.getTracks();
+        
+        // First mute all tracks
+        tracks.forEach(track => {
+            track.enabled = false;
+        });
+        
+        // Wait longer for Bluetooth devices to process the state change
+        await new Promise(resolve => setTimeout(resolve, 150));
+        
+        // Now stop the tracks
+        tracks.forEach(track => {
+            try {
+                track.stop();
+            } catch (e) {
+                logNormal('Error stopping track', e);
+            }
+        });
         mediaStream = null;
+        mediaStreamSource = null;
     } else {
         logVerbose('stopRecording called but mediaStream was already null');
     }
-
 
     // Clear interval if it was used (should not be with worklet)
         if (recordingInterval) {
@@ -820,7 +886,23 @@ async function stopAudioPlayback() {
     try {
         console.log("Sending 'clear' command to PlaybackProcessor.");
         playbackWorkletNode.port.postMessage({ command: 'clear' });
-        playbackNodeConnected = true; // still connected but cleared buffer
+        
+        // Disconnect and reconnect to immediately stop any audio in the pipeline
+        playbackWorkletNode.disconnect();
+        playbackNodeConnected = false;
+        
+        // Reconnect after a small delay to be ready for next playback
+        setTimeout(() => {
+            if (playbackWorkletNode && audioContext && audioContext.state === 'running') {
+                try {
+                    playbackWorkletNode.connect(audioContext.destination);
+                    playbackNodeConnected = true;
+                    console.log("PlaybackProcessor reconnected after stop.");
+                } catch (e) {
+                    console.error("Error reconnecting playback node:", e);
+                }
+            }
+        }, 50);
     } catch (error) {
         console.error("Error sending 'clear' command to PlaybackProcessor:", error);
     }
@@ -959,6 +1041,14 @@ window.audioInterop = {
     getDiagnostics,
     setDiagnosticLevel
 };
+
+// Add cleanup on page unload to prevent error tones
+window.addEventListener('beforeunload', () => {
+    if (isRecording) {
+        stopRecording();
+    }
+    cleanupAudio();
+});
 
 // Export individually for ES module consumers
 export {
