@@ -1,0 +1,33 @@
+@page "/chat"
+@using Ai.Tlbx.VoiceAssistant
+@using Ai.Tlbx.VoiceAssistant.Models
+
+<div class="chat-container">
+    <div class="chat-messages">
+        @if (VoiceAssistant != null)
+        {
+            @foreach (var message in VoiceAssistant.ChatHistory)
+            {
+                <div class="chat-message @(GetMessageType(message))">
+                    @if (message.Role == ChatMessage.ToolRole)
+                    {
+                        <span class="tool-call">[Tool: @message.ToolName] @message.Content</span>
+                    }
+                    else
+                    {
+                        <span>@message.Content</span>
+                    }
+                </div>
+            }
+        }
+    </div>
+</div>
+
+@code {
+    [CascadingParameter] protected VoiceAssistant? VoiceAssistant { get; set; }
+    
+    private string GetMessageType(ChatMessage message)
+    {
+        return message.Role.ToLower();
+    }
+}

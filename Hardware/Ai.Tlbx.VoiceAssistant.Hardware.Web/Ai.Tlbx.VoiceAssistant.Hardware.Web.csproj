@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>    
+    <StaticWebAssetBasePath>/</StaticWebAssetBasePath>
+    
+    <!-- NuGet Package Metadata -->
+    <PackageId>Ai.Tlbx.VoiceAssistant.Hardware.Web</PackageId>
+    <Version>4.0.0</Version>
+    <Authors>Johannes Schmidt</Authors>
+    <Company>TLBX</Company>
+    <Description>Web-specific audio provider for Voice Assistant toolkit</Description>
+    <PackageTags>audio;web;blazor;voiceassistant;hardware;javascript</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <RepositoryUrl>https://github.com/AiTlbx/Ai.Tlbx.VoiceAssistant</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <GeneratePackageOnBuild Condition="'$(Configuration)' == 'Release'">true</GeneratePackageOnBuild>
+    <PackageOutputPath>..\..\nupkg</PackageOutputPath>
+    <PackageProjectUrl>https://github.com/AiTlbx/Ai.Tlbx.VoiceAssistant</PackageProjectUrl>
+    <Copyright>Copyright (c) 2024 Johannes Schmidt, TLBX</Copyright>
+    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="9.0.7" />
+    <ProjectReference Include="..\..\Provider\Ai.Tlbx.VoiceAssistant\Ai.Tlbx.VoiceAssistant.csproj" />
+  </ItemGroup>
+</Project>

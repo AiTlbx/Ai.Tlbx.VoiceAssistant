@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>Ai.Tlbx.VoiceAssistant.WebUi</RootNamespace>
+    
+    <!-- NuGet Package Metadata -->
+    <PackageId>Ai.Tlbx.VoiceAssistant.WebUi</PackageId>
+    <Version>4.0.0</Version>
+    <Authors>Johannes Schmidt</Authors>
+    <Company>TLBX</Company>
+    <Description>Blazor UI components for Voice Assistant toolkit</Description>
+    <PackageTags>voiceassistant;ui;blazor;components</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <GeneratePackageOnBuild Condition="'$(Configuration)' == 'Release'">true</GeneratePackageOnBuild>
+    <PackageOutputPath>..\..\nupkg</PackageOutputPath>    
+  </PropertyGroup>
+
+  
+  <ItemGroup>
+      <PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="9.0.7" />
+    <ProjectReference Include="..\..\Provider\Ai.Tlbx.VoiceAssistant\Ai.Tlbx.VoiceAssistant.csproj" />
+  </ItemGroup>
+
+</Project>

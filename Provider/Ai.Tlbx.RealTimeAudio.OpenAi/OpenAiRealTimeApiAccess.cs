@@ -1,4 +1,10 @@
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Net.WebSockets;
 using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 using Ai.Tlbx.RealTimeAudio.OpenAi.Events;
 using Ai.Tlbx.RealTimeAudio.OpenAi.Internal;
 using Ai.Tlbx.RealTimeAudio.OpenAi.Models;
@@ -34,21 +40,37 @@ namespace Ai.Tlbx.RealTimeAudio.OpenAi
         private OpenAiRealTimeSettings _settings = new OpenAiRealTimeSettings();
         private DateTime _sessionStartTime = DateTime.MinValue;
         
-        // UI Callbacks - Direct actions for simple 1:1 communication
+        // Events
         /// <summary>
-        /// Callback that fires when the connection status changes.
+        /// Event that fires when the connection status changes.
         /// </summary>
-        public Action<string>? OnConnectionStatusChanged { get; set; }
+        public event EventHandler<string>? ConnectionStatusChanged;
         
         /// <summary>
-        /// Callback that fires when a new message is added to the chat history.
+        /// Event that fires when a new message is added to the chat history.
         /// </summary>
-        public Action<OpenAiChatMessage>? OnMessageAdded { get; set; }
+        public event EventHandler<OpenAiChatMessage>? MessageAdded;
+        
         
         /// <summary>
-        /// Callback that fires when the list of microphone devices changes.
+        /// Event that fires when a tool result is available.
         /// </summary>
-        public Action<List<AudioDeviceInfo>>? OnMicrophoneDevicesChanged { get; set; }
+        public event EventHandler<(string ToolName, string Result)>? ToolResultAvailable;
+        
+        /// <summary>
+        /// Event that fires when a tool call is requested.
+        /// </summary>
+        public event EventHandler<ToolCallEventArgs>? ToolCallRequested;
+        
+        /// <summary>
+        /// Event that fires when the list of microphone devices changes.
+        /// </summary>
+        public event EventHandler<List<AudioDeviceInfo>>? MicrophoneDevicesChanged;
+        
+        /// <summary>
+        /// Event that fires when the status is updated.
+        /// </summary>
+        public event EventHandler<StatusUpdateEventArgs>? StatusUpdated;
 
         // Public properties
         /// <summary>
@@ -100,6 +122,11 @@ namespace Ai.Tlbx.RealTimeAudio.OpenAi
             set => _settings.Voice = value;
         }
 
+        /// <summary>
+        /// Gets the turn detection settings (obsolete, use Settings.TurnDetection instead).
+        /// </summary>
+        [Obsolete("Use Settings.TurnDetection instead. This property will be removed in a future version.")]
+        public TurnDetectionSettings TurnDetectionSettings => _settings.TurnDetection;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="OpenAiRealTimeApiAccess"/> class.
@@ -123,8 +150,8 @@ namespace Ai.Tlbx.RealTimeAudio.OpenAi
             _apiKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY") 
                 ?? throw new InvalidOperationException("OPENAI_API_KEY environment variable is not set");
             
-            // Set up logging - no-op if no log action provided (user choice to not log)
-            _logAction = logAction ?? ((level, message) => { /* no-op */ });
+            // Set up logging - use Debug.WriteLine as fallback if no log action provided
+            _logAction = logAction ?? ((level, message) => Debug.WriteLine($"[{level}] {message}"));
             
             // Create logger
             _logger = CreateLogger(logAction);
@@ -339,7 +366,7 @@ namespace Ai.Tlbx.RealTimeAudio.OpenAi
             try
             {
                 var devices = await _hardwareAccess.GetAvailableMicrophones();
-                OnMicrophoneDevicesChanged?.Invoke(devices);
+                MicrophoneDevicesChanged?.Invoke(this, devices);
                 return devices;
             }
             catch (Exception ex)
@@ -359,7 +386,7 @@ namespace Ai.Tlbx.RealTimeAudio.OpenAi
             try
             {
                 var devices = await _hardwareAccess.RequestMicrophonePermissionAndGetDevices();
-                OnMicrophoneDevicesChanged?.Invoke(devices);
+                MicrophoneDevicesChanged?.Invoke(this, devices);
                 return devices;
             }
             catch (Exception ex)
@@ -533,21 +560,11 @@ namespace Ai.Tlbx.RealTimeAudio.OpenAi
             _logAction(level, $"[OpenAiRealTimeApiAccess] {message}");
         }
 
-        /// <summary>
-        /// Logs a message using the centralized logging system.
-        /// </summary>
-        /// <param name="level">The log level.</param>
-        /// <param name="message">The message to log.</param>
-        public void LogMessage(LogLevel level, string message)
-        {
-            _logAction(level, message);
-        }
-
         private void WireUpEvents()
         {
             // WebSocket events
             _webSocketConnection.MessageReceived += OnWebSocketMessageReceived;
-            _webSocketConnection.OnConnectionStatusChanged = OnWebSocketStatusChanged;
+            _webSocketConnection.ConnectionStatusChanged += OnWebSocketStatusChanged;
             
             // Audio manager events
             _audioManager.StatusChanged += OnAudioManagerStatusChanged;
@@ -561,16 +578,16 @@ namespace Ai.Tlbx.RealTimeAudio.OpenAi
             }
         }
 
-        private void OnWebSocketStatusChanged(string status)
+        private void OnWebSocketStatusChanged(object? sender, string status)
         {
             _connectionStatus = status;
-            OnConnectionStatusChanged?.Invoke(status);
+            ConnectionStatusChanged?.Invoke(this, status);
         }
 
         private void OnAudioManagerStatusChanged(object? sender, string status)
         {
             _connectionStatus = status;
-            OnConnectionStatusChanged?.Invoke(status);
+            ConnectionStatusChanged?.Invoke(this, status);
         }
 
         private void ReportStatus(StatusCategory category, StatusCode code, string message, Exception? exception = null)
@@ -597,14 +614,18 @@ namespace Ai.Tlbx.RealTimeAudio.OpenAi
                 _logger.Log(LogLevel.Error, $"Exception: {exception.Message}", exception);
             }
             
-            OnConnectionStatusChanged?.Invoke(message);
+            ConnectionStatusChanged?.Invoke(this, message);
+            StatusUpdated?.Invoke(this, new StatusUpdateEventArgs(category, code, message, exception));
         }
 
         private ICustomLogger CreateLogger(Action<LogLevel, string>? logAction)
         {
-            // Always use ActionCustomLogger with the centralized log action
-            // This ensures all logging goes through the same centralized path
-            return new ActionCustomLogger(_logAction);
+            if (logAction != null)
+            {
+                return new ActionCustomLogger(logAction);
+            }
+            
+            return new DebugCustomLogger();
         }
 
         /// <summary>
@@ -643,10 +664,12 @@ namespace Ai.Tlbx.RealTimeAudio.OpenAi
                 SendMessageAsync);
             
             // Wire up message processor events
-            _messageProcessor.OnMessageAdded = message => OnMessageAdded?.Invoke(message);
-            _messageProcessor.OnStatusChanged = status => {
+            _messageProcessor.MessageAdded += (sender, message) => MessageAdded?.Invoke(this, message);
+            _messageProcessor.ToolCallRequested += (sender, args) => ToolCallRequested?.Invoke(this, args);
+            _messageProcessor.ToolResultAvailable += (sender, result) => ToolResultAvailable?.Invoke(this, result);
+            _messageProcessor.StatusChanged += (sender, status) => {
                 _connectionStatus = status;
-                OnConnectionStatusChanged?.Invoke(status);
+                ConnectionStatusChanged?.Invoke(this, status);
             };
         }
     }

@@ -1,0 +1,26 @@
+﻿@inherits LayoutComponentBase
+@using Ai.Tlbx.VoiceAssistant
+@inject VoiceAssistant voiceAssistant
+@using Ai.Tlbx.VoiceAssistant.Demo.Web
+
+<div class="page">
+    <main>
+        <div class="top-row px-4">
+            <h1>AI Voice Assistant Demo</h1>
+        </div>
+
+        <article class="content px-4">
+            <CascadingValue Value="voiceAssistant">
+                @Body
+            </CascadingValue>
+        </article>
+    </main>
+</div>
+
+<div id="blazor-error-ui">
+    An unhandled error has occurred.
+    <a href="" class="reload">Reload</a>
+    <a class="dismiss">🗙</a>
+</div>
+
+<link rel="stylesheet" href="_content/Ai.Tlbx.VoiceAssistant.WebUi/css/components.css" />

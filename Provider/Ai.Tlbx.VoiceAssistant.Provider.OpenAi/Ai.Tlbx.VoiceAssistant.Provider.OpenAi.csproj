@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <WarningsAsErrors />
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <PackageId>Ai.Tlbx.VoiceAssistant.Provider.OpenAi</PackageId>
+    <Description>OpenAI provider implementation for the Voice Assistant toolkit. Enables real-time conversation with OpenAI's GPT models through WebSocket connections.</Description>
+    <Authors>Your Name</Authors>
+    <PackageTags>AI;OpenAI;VoiceAssistant;RealTime;Audio;GPT</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <RepositoryUrl>https://github.com/your-repo/voice-assistant</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/your-repo/voice-assistant</PackageProjectUrl>
+    <Copyright>Copyright © 2025</Copyright>
+    <Product>Voice Assistant Toolkit</Product>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.Net.WebSockets.Client" Version="4.3.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Ai.Tlbx.VoiceAssistant\Ai.Tlbx.VoiceAssistant.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -8,29 +8,29 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Build the entire solution:
 ```bash
-dotnet build TLBX.Ai.RealTimeAudio.slnx
+dotnet build TLBX.Ai.VoiceAssistant.slnx
 ```
 
 Build and generate NuGet packages:
 ```bash
-dotnet pack TLBX.Ai.RealTimeAudio.slnx
+dotnet pack TLBX.Ai.VoiceAssistant.slnx
 ```
 
 Run specific demo applications:
 ```bash
 # Windows Demo
-dotnet run --project Demo/Ai.Tlbx.RealTimeAudio.Demo.Windows/Ai.Tlbx.RealTimeAudio.Demo.Windows.csproj
+dotnet run --project Demo/Ai.Tlbx.VoiceAssistant.Demo.Windows/Ai.Tlbx.VoiceAssistant.Demo.Windows.csproj
 
 # Linux Demo
-dotnet run --project Demo/Ai.Tlbx.RealTimeAudio.Demo.Linux/Ai.Tlbx.RealTimeAudio.Demo.Linux.csproj
+dotnet run --project Demo/Ai.Tlbx.VoiceAssistant.Demo.Linux/Ai.Tlbx.VoiceAssistant.Demo.Linux.csproj
 
 # Web Demo
-dotnet run --project Demo/Ai.Tlbx.RealTimeAudio.Demo.Web/Ai.Tlbx.RealTimeAudio.Demo.Web.csproj
+dotnet run --project Demo/Ai.Tlbx.VoiceAssistant.Demo.Web/Ai.Tlbx.VoiceAssistant.Demo.Web.csproj
 ```
 
 Clean build artifacts:
 ```bash
-dotnet clean TLBX.Ai.RealTimeAudio.slnx
+dotnet clean TLBX.Ai.VoiceAssistant.slnx
 ```
 
 Publish NuGet packages (auto-increment version):
@@ -43,60 +43,63 @@ Deep clean of bin/obj folders:
 cleanBinObj.cmd
 ```
 
-## High-Level Architecture
+## High-Level Architecture (v4.0)
 
-This is a real-time audio processing toolkit that integrates with AI services (primarily OpenAI). The architecture follows a layered approach with clear separation between platform-specific audio handling and cross-platform AI integration.
+This is a voice assistant toolkit that provides a modular architecture for integrating with multiple AI providers. The v4.0 redesign introduces a composition-based architecture with clean separation between orchestration and provider implementations.
 
 ### Core Components
 
-1. **Provider Layer** (`Provider/Ai.Tlbx.RealTimeAudio.OpenAi/`)
-   - `OpenAiRealTimeApiAccess`: Main orchestrator that manages WebSocket connections to OpenAI's real-time API, handles audio streaming, transcription, and conversation state
-   - Implements event-driven architecture with events for status updates, messages, and tool calls
-   - Extensible tool system via `RealTimeTool` base class
-   - Supports latest OpenAI models: `gpt-4o-realtime-preview-2025-06-03`
+1. **Main Orchestrator** (`Provider/Ai.Tlbx.VoiceAssistant/`)
+   - `VoiceAssistant`: Main orchestrator class that coordinates between hardware and AI providers
+   - Provider-agnostic interfaces: `IVoiceProvider`, `IVoiceSettings`, `IVoiceTool`
+   - Fluent DI configuration via `VoiceAssistantBuilder`
+   - Thread-safe `ChatHistoryManager` for conversation state
 
-2. **Hardware Abstraction** (`IAudioHardwareAccess` interface)
+2. **Provider Implementations** 
+   - **OpenAI** (`Provider/Ai.Tlbx.VoiceAssistant.Provider.OpenAi/`): WebSocket-based real-time API
+   - Future: Google, xAI, and custom providers
+   - Each provider implements `IVoiceProvider` interface
+
+3. **Hardware Abstraction** (`IAudioHardwareAccess` interface)
    - Defines contract for platform-specific audio operations
    - Key methods: `InitAudio()`, `StartRecordingAudio()`, `PlayAudio()`, `GetAvailableMicrophones()`
    - Each platform provides its own implementation
 
-3. **Platform Implementations**
-   - **Windows** (`Hardware/Ai.Tlbx.RealTimeAudio.Hardware.Windows/`): Uses NAudio library
-   - **Linux** (`Hardware/Ai.Tlbx.RealTimeAudio.Hardware.Linux/`): Direct ALSA integration via P/Invoke
-   - **Web** (`Hardware/Ai.Tlbx.RealTimeAudio.Hardware.Web/`): JavaScript interop with Web Audio API and AudioWorklet
+4. **Platform Implementations**
+   - **Windows** (`Hardware/Ai.Tlbx.VoiceAssistant.Hardware.Windows/`): Uses NAudio library
+   - **Linux** (`Hardware/Ai.Tlbx.VoiceAssistant.Hardware.Linux/`): Direct ALSA integration via P/Invoke
+   - **Web** (`Hardware/Ai.Tlbx.VoiceAssistant.Hardware.Web/`): JavaScript interop with Web Audio API and AudioWorklet
 
-4. **UI Components** (`WebUi/Ai.Tlbx.RealTime.WebUi/`)
+5. **UI Components** (`WebUi/Ai.Tlbx.VoiceAssistant.WebUi/`)
    - Reusable Blazor components for audio controls and chat interfaces
    - Platform-agnostic UI elements
 
 ### Audio Processing Flow
 
 1. Platform-specific hardware captures audio as PCM 16-bit format
-2. Audio is base64 encoded and streamed via WebSocket to OpenAI
+2. Audio is base64 encoded and forwarded to the AI provider
 3. AI responses (text and audio) are received and processed
 4. Audio responses are decoded and played through platform hardware
-5. Events notify UI of status changes and new messages
+5. Callbacks notify UI of status changes and new messages
 
 ### Key Design Patterns
 
+- **Composition Pattern**: VoiceAssistant orchestrator composes with pluggable providers
 - **Strategy Pattern**: Platform implementations via `IAudioHardwareAccess`
-- **Observer Pattern**: Event-driven updates throughout the system
-- **Facade Pattern**: `OpenAiRealTimeApiAccess` simplifies WebSocket complexity
-- **Template Method**: `RealTimeTool` for custom AI tool extensions
+- **Dependency Injection**: Fluent builder pattern for DI configuration
+- **Template Method**: `IVoiceTool` for custom AI tool extensions
 
 ### Package Distribution
 
 The solution produces multiple NuGet packages (output to `nupkg/`):
-- `Ai.Tlbx.RealTimeAudio.OpenAi`: Core provider functionality
-- `Ai.Tlbx.RealTimeAudio.Hardware.Windows`: Windows audio support
-- `Ai.Tlbx.RealTimeAudio.Hardware.Linux`: Linux audio support
-- `Ai.Tlbx.RealTimeAudio.Hardware.Web`: Web/Blazor audio support
+- `Ai.Tlbx.VoiceAssistant`: Core orchestrator and interfaces
+- `Ai.Tlbx.VoiceAssistant.Provider.OpenAi`: OpenAI provider implementation
+- `Ai.Tlbx.VoiceAssistant.Hardware.Windows`: Windows audio support
+- `Ai.Tlbx.VoiceAssistant.Hardware.Linux`: Linux audio support
+- `Ai.Tlbx.VoiceAssistant.Hardware.Web`: Web/Blazor audio support
+- `Ai.Tlbx.VoiceAssistant.WebUi`: Reusable UI components
 
 Version is tracked in `version.txt` and auto-incremented by `publish-nuget.ps1`.
-
-### Code Style Guidelines
-
-The project follows German code style guidelines from `CodeStyleGuide.md`.
 
 ### Logging Strategy
 
@@ -104,7 +107,7 @@ This codebase uses a **centralized logging architecture** detailed in [`LoggingS
 
 **⚠️ CRITICAL: DO NOT USE ILogger<T> OR Microsoft.Extensions.Logging**
 
-All logging flows from lower layers up to `OpenAiRealTimeApiAccess` where users configure their preferred logging approach. This pattern:
+All logging flows from lower layers up to the orchestrator where users configure their preferred logging approach. This pattern:
 - Maintains clean architecture boundaries
 - Allows user choice of logging framework
 - Simplifies testing and debugging
@@ -115,6 +118,7 @@ Always use `Action<LogLevel, string>` for logging delegation and forward logs up
 ### Important Notes
 
 - The project targets .NET 9.0
+- Version 4.0 introduces breaking changes from v3.x
 - No automated tests are currently included - testing is done via demo applications
 - Windows components require Windows 10 or later
 - Linux components require libasound (ALSA) to be installed
