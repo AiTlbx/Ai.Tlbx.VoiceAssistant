@@ -171,10 +171,17 @@ namespace Ai.Tlbx.VoiceAssistant
         {
             try
             {
+                // First stop recording to prevent new audio
                 await _hardwareAccess.StopRecordingAudio();
                 IsRecording = false;
+                
+                // Clear any queued audio immediately
+                await _hardwareAccess.ClearAudioQueue();
+                
+                // Then disconnect from provider
                 await _provider.DisconnectAsync();
                 _isInitialized = false;
+                
                 ReportStatus("Voice assistant stopped");
                 _logAction(LogLevel.Info, "Voice assistant stopped");
             }

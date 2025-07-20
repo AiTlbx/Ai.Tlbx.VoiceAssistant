@@ -48,7 +48,7 @@
                                 <div>
                                     <label class="block text-xs font-medium text-gray-600 mb-1">Microphone</label>
                                     <MicrophoneSelect AvailableMicrophones="availableMicrophones" 
-                                                     SelectedMicrophoneId="selectedMicrophoneId" 
+                                                     @bind-SelectedMicrophoneId="selectedMicrophoneId" 
                                                      MicPermissionGranted="micPermissionGranted" 
                                                      OnRequestPermission="RequestMicrophonePermission" />
                                 </div>
@@ -234,26 +234,18 @@
     {
         try
         {
-            // Check if permission is already granted without activating microphone
-            var permissionState = await JS.InvokeAsync<string>("eval", @"
-                (async function() {
-                    try {
-                        const permission = await navigator.permissions.query({name: 'microphone'});
-                        return permission.state;
-                    } catch (e) {
-                        return 'prompt';
-                    }
-                })()
-            ");
+            // Just get available microphones - the JS will check permissions without activating
+            var mics = await voiceAssistant.GetAvailableMicrophonesAsync();
             
-            Log(LogLevel.Info, $"Microphone permission state: {permissionState}");
+            // Check if we have actual device information - actual device labels mean permission is granted
+            bool hasRealDeviceNames = mics.Count > 0 && 
+                mics.Any(m => !string.IsNullOrEmpty(m.Name) && !m.Name.StartsWith("Microphone "));
             
-            if (permissionState == "granted")
+            micPermissionGranted = hasRealDeviceNames;
+            Log(LogLevel.Info, $"Permission check: Permission granted: {micPermissionGranted}, Found {mics.Count} microphones");
+            
+            if (mics.Count > 0)
             {
-                // Permission is already granted, get device list WITHOUT activating microphone
-                micPermissionGranted = true;
-                
-                var mics = await voiceAssistant.GetAvailableMicrophonesAsync();
                 availableMicrophones = mics.Select(m => new MicrophoneSelect.MicrophoneInfo
                 {
                     Id = m.Id,
@@ -261,20 +253,22 @@
                     IsDefault = m.IsDefault
                 }).ToList();
                 
-                // Select default or first microphone but DON'T set it yet
-                if (availableMicrophones.Count > 0)
+                // Select default or first microphone
+                var defaultMic = availableMicrophones.FirstOrDefault(m => m.IsDefault);
+                if (defaultMic != null)
                 {
-                    var defaultMic = availableMicrophones.FirstOrDefault(m => m.IsDefault);
-                    selectedMicrophoneId = defaultMic?.Id ?? availableMicrophones[0].Id;
-                    Log(LogLevel.Info, $"Permission granted - found {mics.Count} microphones, selected: {availableMicrophones.FirstOrDefault(m => m.Id == selectedMicrophoneId)?.Name ?? "Unknown"}");
+                    selectedMicrophoneId = defaultMic.Id;
+                    Log(LogLevel.Info, $"Selected default microphone: {defaultMic.Name}");
+                }
+                else if (availableMicrophones.Count > 0)
+                {
+                    selectedMicrophoneId = availableMicrophones[0].Id;
+                    Log(LogLevel.Info, $"Selected first microphone: {availableMicrophones[0].Name}");
                 }
             }
             else
             {
-                // Permission not granted, don't activate microphone
-                micPermissionGranted = false;
-                availableMicrophones = new List<MicrophoneSelect.MicrophoneInfo>();
-                Log(LogLevel.Info, "Microphone permission not granted - will request when user clicks grant access");
+                Log(LogLevel.Info, "No microphones found or permission not granted");
             }
         }
         catch (Exception ex)

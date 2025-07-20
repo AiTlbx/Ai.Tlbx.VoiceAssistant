@@ -58,79 +58,80 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Web
             _logAction?.Invoke(level, $"[WebAudioAccess] {message}");
         }
 
+        private async Task LoadJavaScriptModule()
+        {
+            if (_audioModule == null)
+            {
+                try
+                {
+                    // Try to import as a module
+                    _audioModule = await _jsRuntime.InvokeAsync<IJSObjectReference>("import", "./js/webAudioAccess.js");
+                    Log(LogLevel.Info, "Successfully imported webAudioAccess.js as a module");
+                }
+                catch (Exception importEx)
+                {
+                    Log(LogLevel.Warn, $"Module import failed: {importEx.Message}");
+                    
+                    try
+                    {
+                        // Then try accessing via global window.audioInterop
+                        Log(LogLevel.Info, "Trying window.audioInterop");
+                        _audioModule = await _jsRuntime.InvokeAsync<IJSObjectReference>("eval", "window.audioInterop");
+                        
+                        if (_audioModule == null)
+                        {
+                            throw new InvalidOperationException("window.audioInterop is null or undefined");
+                        }
+                        
+                        Log(LogLevel.Info, "Successfully accessed webAudioAccess.js via window.audioInterop");
+                    }
+                    catch (Exception globalEx)
+                    {
+                        Log(LogLevel.Error, $"Both module import and global access failed. Import error: {importEx.Message}, Global error: {globalEx.Message}");
+                        throw new InvalidOperationException($"Failed to load audio module: {globalEx.Message}");
+                    }
+                }
+
+                // Set .NET reference in JavaScript
+                if (_audioModule != null)
+                {
+                    var objRef = DotNetObjectReference.Create(this);
+                    await _audioModule.InvokeVoidAsync("setDotNetReference", objRef);
+                    Log(LogLevel.Info, "Successfully set DotNet reference");
+                }
+            }
+        }
+
         public async Task InitAudio()
         {
             try
             {
+                // First ensure the JavaScript module is loaded
+                await LoadJavaScriptModule();
+                
                 if (_audioModule == null)
                 {
-                    // Try multiple approaches to get the audio module
-                    try
-                    {
-                        // First try to import as a module
-                        _audioModule = await _jsRuntime.InvokeAsync<IJSObjectReference>("import", "./js/webAudioAccess.js");
-                        Log(LogLevel.Info, "Successfully imported webAudioAccess.js as a module");
-                    }
-                    catch (Exception importEx)
-                    {
-                        Log(LogLevel.Warn, $"Module import failed: {importEx.Message}");
-                        
-                        try
-                        {
-                            // Then try accessing via global window.audioInterop
-                            Log(LogLevel.Info, "Trying window.audioInterop");
-                            _audioModule = await _jsRuntime.InvokeAsync<IJSObjectReference>("eval", "window.audioInterop");
-                            
-                            if (_audioModule == null)
-                            {
-                                throw new InvalidOperationException("window.audioInterop is null or undefined");
-                            }
-                            Log(LogLevel.Info, "Successfully accessed window.audioInterop");
-                        }
-                        catch (Exception windowEx)
-                        {
-                            Log(LogLevel.Error, $"window.audioInterop access failed: {windowEx.Message}");
-                            throw new InvalidOperationException($"Failed to access audio module: Module import error: {importEx.Message}, Global access error: {windowEx.Message}");
-                        }
-                    }
+                    throw new InvalidOperationException("Failed to load JavaScript audio module");
+                }
                     
-                    // Create the .NET reference for JS callbacks before initializing
-                    if (_dotNetReference == null)
+                // Make sure audio permissions are properly requested and the AudioContext is activated
+                try
+                {
+                    var permissionResult = await _audioModule.InvokeAsync<bool>("initAudioWithUserInteraction");
+                    if (!permissionResult)
                     {
-                        _dotNetReference = DotNetObjectReference.Create(this);
+                        throw new InvalidOperationException("Failed to initialize audio system. Microphone permission might be denied.");
                     }
+                    Log(LogLevel.Info, "Successfully initialized audio with user interaction");
                     
-                    // Set the DotNet reference first
-                    try
-                    {
-                        await _audioModule.InvokeVoidAsync("setDotNetReference", _dotNetReference);
-                        Log(LogLevel.Info, "Successfully set DotNet reference");
-                    }
-                    catch (Exception setRefEx)
-                    {
-                        Log(LogLevel.Error, $"Error setting DotNet reference: {setRefEx.Message}");
-                        throw new InvalidOperationException($"Failed to set DotNet reference: {setRefEx.Message}");
-                    }
-                    
-                    // Make sure audio permissions are properly requested and the AudioContext is activated
-                    try
-                    {
-                        var permissionResult = await _audioModule.InvokeAsync<bool>("initAudioWithUserInteraction");
-                        if (!permissionResult)
-                        {
-                            throw new InvalidOperationException("Failed to initialize audio system. Microphone permission might be denied.");
-                        }
-                        Log(LogLevel.Info, "Successfully initialized audio with user interaction");
-                        
-                        // Set the diagnostic level now that the module is initialized
-                        await _audioModule.InvokeVoidAsync("setDiagnosticLevel", (int)_diagnosticLevel);
-                        Log(LogLevel.Info, $"Diagnostic level set to: {_diagnosticLevel}");
-                    }
-                    catch (Exception initEx)
-                    {
-                        Log(LogLevel.Error, $"Error initializing audio with user interaction: {initEx.Message}");
-                        throw new InvalidOperationException($"Failed to initialize audio: {initEx.Message}");
-                    }
+                    // Set the diagnostic level now that the module is initialized
+                    await _audioModule.InvokeVoidAsync("setDiagnosticLevel", (int)_diagnosticLevel);
+                    Log(LogLevel.Info, $"Diagnostic level set to: {_diagnosticLevel}");
+                }
+                catch (Exception initEx)
+                {
+                    Log(LogLevel.Error, $"Error initializing audio with user interaction: {initEx.Message}");
+                    throw new InvalidOperationException($"Failed to initialize audio: {initEx.Message}");
                 }
             }
             catch (InvalidOperationException ex) when (ex.Message.Contains("JavaScript interop calls cannot be issued at this time"))
@@ -613,7 +614,8 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Web
         {
             if (_audioModule == null)
             {
-                await InitAudio();
+                // Only load the JS module, don't initialize audio context to avoid Bluetooth SCO activation
+                await LoadJavaScriptModule();
             }
 
             if (_audioModule == null)

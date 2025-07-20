@@ -434,7 +434,15 @@ async function requestMicrophonePermissionAndGetDevices() {
         }
         
         // Now request microphone permission
-        const tempStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        // Use Bluetooth-friendly constraints to avoid triggering SCO mode
+        const tempStream = await navigator.mediaDevices.getUserMedia({ 
+            audio: {
+                sampleRate: { ideal: 48000, min: 44100 },
+                echoCancellation: false,
+                noiseSuppression: false,
+                autoGainControl: false
+            } 
+        });
         const tracks = tempStream.getTracks();
         
         logNormal('Microphone permission granted', {
@@ -491,11 +499,11 @@ async function getAvailableMicrophones() {
         if (!hasLabels && permissionStatus?.state !== 'granted') {
             console.log("No device labels available - permission not granted, returning devices without labels");
             // Return devices without labels - this won't activate microphone
-            const microphones = devices
-                .filter(device => device.kind === 'audioinput')
-                .map(device => ({
+            const audioInputs = devices.filter(device => device.kind === 'audioinput');
+            const microphones = audioInputs.map((device, index) => ({
                     id: device.deviceId,
-                    name: device.label || `Microphone ${device.deviceId.substring(0, 8)}` // Provide a fallback name
+                    name: device.label || `Microphone ${device.deviceId.substring(0, 8)}`, // Provide a fallback name
+                    isDefault: index === 0 || device.deviceId === 'default' // First device or 'default' ID
                 }));
             
             console.log("Available microphones (no labels):", microphones);
@@ -503,11 +511,11 @@ async function getAvailableMicrophones() {
         }
         
         // Filter for audio input devices and map to the expected format
-        const microphones = devices
-            .filter(device => device.kind === 'audioinput')
-            .map(device => ({
-                    id: device.deviceId,
-                name: device.label || `Microphone ${device.deviceId.substring(0, 8)}` // Provide a fallback name
+        const audioInputs = devices.filter(device => device.kind === 'audioinput');
+        const microphones = audioInputs.map((device, index) => ({
+                id: device.deviceId,
+                name: device.label || `Microphone ${device.deviceId.substring(0, 8)}`, // Provide a fallback name
+                isDefault: index === 0 || device.deviceId === 'default' // First device or 'default' ID
             }));
         
         console.log("Available microphones:", microphones);
@@ -561,10 +569,12 @@ async function startRecording(dotNetObj, intervalMs = 500, deviceId = null) {
         const constraints = {
             audio: {
                 channelCount: 1,
-                sampleRate: playbackSampleRate, // Use consistent rate
-                echoCancellation: true,
-                noiseSuppression: true,
-                autoGainControl: true,
+                // Use higher sample rate to avoid telephony rates that trigger SCO
+                sampleRate: { ideal: 48000, min: 44100 },
+                // Disable processing that might trigger SCO mode
+                echoCancellation: false,
+                noiseSuppression: false,
+                autoGainControl: false,
                 ...(deviceId && { deviceId: { exact: deviceId } }) // Apply specific device ID if provided
             },
             video: false
@@ -937,7 +947,14 @@ async function startMicTest() {
      isMicTesting = true;
 
      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: { /* constraints */ } });
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+            audio: { 
+                sampleRate: { ideal: 48000, min: 44100 },
+                echoCancellation: false,
+                noiseSuppression: false,
+                autoGainControl: false
+            } 
+        });
         micTestSource = audioContext.createMediaStreamSource(stream);
 
         // Recorder Node (can reuse main one if not recording, or create temp)
