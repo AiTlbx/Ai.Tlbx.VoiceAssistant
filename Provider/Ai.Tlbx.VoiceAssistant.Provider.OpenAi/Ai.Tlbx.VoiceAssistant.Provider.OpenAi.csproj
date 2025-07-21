@@ -9,7 +9,7 @@
     
     <!-- NuGet Package Metadata -->
     <PackageId>Ai.Tlbx.VoiceAssistant.Provider.OpenAi</PackageId>
-    <Version>4.0.0</Version>
+    <Version>4.0.1</Version>
     <Authors>Johannes Schmidt</Authors>
     <Company>TLBX</Company>
     <Description>OpenAI provider implementation for the Voice Assistant toolkit. Enables real-time conversation with OpenAI's GPT models through WebSocket connections.</Description>

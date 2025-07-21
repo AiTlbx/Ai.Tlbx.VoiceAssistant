@@ -7,7 +7,7 @@
     
     <!-- NuGet Package Metadata -->
     <PackageId>Ai.Tlbx.VoiceAssistant.Hardware.Linux</PackageId>
-    <Version>3.0.4</Version>
+    <Version>4.0.1</Version>
     <Authors>Johannes Schmidt</Authors>
     <Company>TLBX</Company>
     <Description>Linux-specific hardware integration for voice assistant audio processing</Description>
