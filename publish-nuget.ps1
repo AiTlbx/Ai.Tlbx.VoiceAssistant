@@ -115,10 +115,11 @@ else
 
 # Projects to build
 $projects = @(
-    "Provider\Ai.Tlbx.RealTimeAudio.OpenAi\Ai.Tlbx.RealTimeAudio.OpenAi.csproj",
-    "Hardware\Ai.Tlbx.RealTimeAudio.Hardware.Windows\Ai.Tlbx.RealTimeAudio.Hardware.Windows.csproj",
-    "Hardware\Ai.Tlbx.RealTimeAudio.Hardware.Web\Ai.Tlbx.RealTimeAudio.Hardware.Web.csproj",
-    "Hardware\Ai.Tlbx.RealTimeAudio.Hardware.Linux\Ai.Tlbx.RealTimeAudio.Hardware.Linux.csproj"
+    "Provider\Ai.Tlbx.VoiceAssistant\Ai.Tlbx.VoiceAssistant.csproj",
+    "Provider\Ai.Tlbx.VoiceAssistant.Provider.OpenAi\Ai.Tlbx.VoiceAssistant.Provider.OpenAi.csproj",
+    "Hardware\Ai.Tlbx.VoiceAssistant.Hardware.Windows\Ai.Tlbx.VoiceAssistant.Hardware.Windows.csproj",
+    "Hardware\Ai.Tlbx.VoiceAssistant.Hardware.Web\Ai.Tlbx.VoiceAssistant.Hardware.Web.csproj",
+    "Hardware\Ai.Tlbx.VoiceAssistant.Hardware.Linux\Ai.Tlbx.VoiceAssistant.Hardware.Linux.csproj"
 )
 
 $allPackagesSuccessful = $true
