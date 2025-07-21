@@ -111,6 +111,7 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.OpenAi
             }
 
             _settings = openAiSettings;
+            _logAction(LogLevel.Info, $"Settings configured - Voice: {_settings.Voice}, Speed: {_settings.TalkingSpeed}, Model: {_settings.Model}");
 
             try
             {
@@ -173,6 +174,28 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.OpenAi
             {
                 _logAction(LogLevel.Error, $"Error during disconnection: {ex.Message}");
                 OnError?.Invoke($"Disconnection error: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Updates the settings for an existing connection and sends the configuration to OpenAI.
+        /// </summary>
+        /// <param name="settings">The new settings to apply.</param>
+        /// <returns>A task representing the update operation.</returns>
+        public async Task UpdateSettingsAsync(IVoiceSettings settings)
+        {
+            if (settings is not OpenAiVoiceSettings openAiSettings)
+            {
+                throw new ArgumentException("Settings must be of type OpenAiVoiceSettings for OpenAI provider", nameof(settings));
+            }
+
+            _settings = openAiSettings;
+            _logAction(LogLevel.Info, $"Settings configured - Voice: {_settings.Voice}, Speed: {_settings.TalkingSpeed}, Model: {_settings.Model}");
+            
+            if (IsConnected)
+            {
+                _logAction(LogLevel.Info, "Updating session configuration for existing connection");
+                await SendSessionConfigurationAsync();
             }
         }
 
@@ -293,10 +316,13 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.OpenAi
             if (_settings == null || !IsConnected)
                 return;
 
+            var voiceString = _settings.Voice.ToString().ToLowerInvariant();
+            _logAction(LogLevel.Info, $"Configuring session with voice: {_settings.Voice} -> {voiceString}");
+            
             var session = new Dictionary<string, object>
             {
                 ["model"] = _settings.Model.ToApiString(),
-                ["voice"] = _settings.Voice.ToString().ToLowerInvariant(),
+                ["voice"] = voiceString,
                 ["instructions"] = _settings.Instructions,
                 ["temperature"] = _settings.Temperature,
                 ["speed"] = _settings.TalkingSpeed,
@@ -333,7 +359,9 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.OpenAi
                 session = session
             };
 
-            await SendMessageAsync(JsonSerializer.Serialize(sessionConfig));
+            var jsonMessage = JsonSerializer.Serialize(sessionConfig, new JsonSerializerOptions { WriteIndented = true });
+            _logAction(LogLevel.Info, $"Sending session config to OpenAI:\n{jsonMessage}");
+            await SendMessageAsync(jsonMessage);
             _logAction(LogLevel.Info, "Session configuration sent to OpenAI");
         }
 

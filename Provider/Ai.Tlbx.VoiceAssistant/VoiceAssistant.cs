@@ -166,6 +166,12 @@ namespace Ai.Tlbx.VoiceAssistant
                         }
                     }
                 }
+                else
+                {
+                    // Provider is already connected, just update the settings
+                    _logAction(LogLevel.Info, "Provider already connected, updating settings");
+                    await _provider.UpdateSettingsAsync(settings);
+                }
                 
                 cancellationToken.ThrowIfCancellationRequested();
                 

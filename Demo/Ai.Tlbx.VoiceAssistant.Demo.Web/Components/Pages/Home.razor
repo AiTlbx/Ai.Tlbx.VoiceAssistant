@@ -38,7 +38,7 @@
                                 <!-- Voice Selection -->
                                 <div>
                                     <label for="voiceSelect" class="block text-xs font-medium text-gray-600 mb-1">Voice</label>
-                                    <VoiceSelect SelectedVoice="@currentVoiceString" SelectedVoiceChanged="OnVoiceChanged" Disabled="@(voiceAssistant.IsConnecting || voiceAssistant.IsRecording)" />
+                                    <VoiceSelect AvailableVoices="@availableVoices" @bind-SelectedVoice="@currentVoiceString" Disabled="@(voiceAssistant.IsConnecting || voiceAssistant.IsRecording)" />
                                 </div>
 
                                 <!-- Voice Speed -->
@@ -133,10 +133,25 @@
 @code 
 {
     private ElementReference chatContainer;
-    private string currentVoiceString = string.Empty;
     private AssistantVoice currentVoice = AssistantVoice.Alloy;
+    private string _currentVoiceString = "Alloy";
+    private string currentVoiceString 
+    {
+        get => _currentVoiceString;
+        set
+        {
+            _currentVoiceString = value;
+            if (Enum.TryParse<AssistantVoice>(value, out var voice))
+            {
+                currentVoice = voice;
+                sessionSettings = sessionSettings with { SelectedVoice = value };
+                Log(LogLevel.Info, $"Voice changed to: {currentVoice}");
+            }
+        }
+    }
     private double currentVoiceSpeed = 1.0;
     private bool useTimeTool = true;
+    private List<string> availableVoices = Enum.GetValues<AssistantVoice>().Select(v => v.ToString()).ToList();
     
     // Microphone selection related fields
     private List<MicrophoneSelect.MicrophoneInfo> availableMicrophones = new();
@@ -351,14 +366,6 @@
         }
     }
 
-    private async Task OnVoiceChanged(string newVoice)
-    {
-        currentVoiceString = newVoice;
-        // Store voice selection for next start
-        currentVoice = Enum.Parse<AssistantVoice>(newVoice, true);
-        sessionSettings = sessionSettings with { SelectedVoice = newVoice };
-        await Task.CompletedTask;
-    }
 
     private async Task OnVoiceSpeedChanged(double newSpeed)
     {
@@ -446,6 +453,8 @@
                 Model = OpenAiRealtimeModel.Gpt4oRealtimePreview20250603
                 // Tools = tools
             };
+            
+            Log(LogLevel.Info, $"Starting session with voice: {currentVoice}");
             
             // Start the session with the configured settings
             await voiceAssistant.StartAsync(settings);

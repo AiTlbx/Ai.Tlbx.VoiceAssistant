@@ -27,6 +27,13 @@ namespace Ai.Tlbx.VoiceAssistant.Interfaces
         Task DisconnectAsync();
         
         /// <summary>
+        /// Updates the settings for an existing connection.
+        /// </summary>
+        /// <param name="settings">The new settings to apply.</param>
+        /// <returns>A task representing the update operation.</returns>
+        Task UpdateSettingsAsync(IVoiceSettings settings);
+        
+        /// <summary>
         /// Processes audio data received from the microphone and sends it to the AI provider.
         /// </summary>
         /// <param name="base64Audio">Base64-encoded PCM 16-bit audio data.</param>

@@ -66,11 +66,13 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.OpenAi.Models
     public enum AssistantVoice
     {
         Alloy,
+        Ash,
+        Ballad,
+        Coral,
         Echo,
-        Fable,
-        Onyx,
-        Nova,
-        Shimmer
+        Sage,
+        Shimmer,
+        Verse
     }
 
     /// <summary>
