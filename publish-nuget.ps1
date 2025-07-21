@@ -119,7 +119,8 @@ $projects = @(
     "Provider\Ai.Tlbx.VoiceAssistant.Provider.OpenAi\Ai.Tlbx.VoiceAssistant.Provider.OpenAi.csproj",
     "Hardware\Ai.Tlbx.VoiceAssistant.Hardware.Windows\Ai.Tlbx.VoiceAssistant.Hardware.Windows.csproj",
     "Hardware\Ai.Tlbx.VoiceAssistant.Hardware.Web\Ai.Tlbx.VoiceAssistant.Hardware.Web.csproj",
-    "Hardware\Ai.Tlbx.VoiceAssistant.Hardware.Linux\Ai.Tlbx.VoiceAssistant.Hardware.Linux.csproj"
+    "Hardware\Ai.Tlbx.VoiceAssistant.Hardware.Linux\Ai.Tlbx.VoiceAssistant.Hardware.Linux.csproj",
+    "WebUi\Ai.Tlbx.VoiceAssistant.WebUi\Ai.Tlbx.VoiceAssistant.WebUi.csproj"
 )
 
 $allPackagesSuccessful = $true
@@ -151,9 +152,20 @@ foreach ($project in $projects)
     Write-Host "Packing $projectName..."
     dotnet pack $projectPath -c $Configuration --no-build
     
-    # Find the generated package
-    $packagePattern = Join-Path $nupkgDir "$projectName.*.nupkg"
-    $packageFiles = Get-ChildItem -Path $packagePattern | Sort-Object LastWriteTime -Descending
+    # Find the generated package - check both nupkg directory and project's bin/Release
+    $packagePattern1 = Join-Path $nupkgDir "$projectName.*.nupkg"
+    $projectDir = Split-Path $projectPath -Parent
+    $packagePattern2 = Join-Path $projectDir "bin\$Configuration\$projectName.*.nupkg"
+    
+    $packageFiles = @()
+    if (Test-Path $packagePattern1) {
+        $packageFiles += Get-ChildItem -Path $packagePattern1
+    }
+    if (Test-Path $packagePattern2) {
+        $packageFiles += Get-ChildItem -Path $packagePattern2
+    }
+    
+    $packageFiles = $packageFiles | Sort-Object LastWriteTime -Descending
     
     if ($packageFiles.Count -eq 0) 
     {
@@ -164,6 +176,15 @@ foreach ($project in $projects)
     
     $package = $packageFiles[0]
     Write-Host "Package created: $($package.Name)"
+    
+    # If package is not in nupkg directory, move it there
+    if ($package.DirectoryName -ne $nupkgDir) 
+    {
+        $destination = Join-Path $nupkgDir $package.Name
+        Move-Item -Path $package.FullName -Destination $destination -Force
+        $package = Get-Item $destination
+        Write-Host "Moved package to: $destination"
+    }
     
     # Publish the package if API key is available
     if ($willPublish) 
