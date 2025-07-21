@@ -139,9 +139,21 @@ foreach ($project in $projects)
     dotnet clean $projectPath -c $Configuration
     
     # Update the version in the project file
-    $projectContent = Get-Content $projectPath
-    $updatedContent = $projectContent -replace "<Version>.*?</Version>", "<Version>$fullVersion</Version>"
-    $updatedContent | Set-Content $projectPath
+    $projectContent = Get-Content $projectPath -Raw
+    
+    # Check if Version tag exists
+    if ($projectContent -match "<Version>.*?</Version>") 
+    {
+        # Replace existing version
+        $updatedContent = $projectContent -replace "<Version>.*?</Version>", "<Version>$fullVersion</Version>"
+    }
+    else 
+    {
+        # Add version tag after TargetFramework
+        $updatedContent = $projectContent -replace "(<TargetFramework>.*?</TargetFramework>)", "`$1`n    <Version>$fullVersion</Version>"
+    }
+    
+    $updatedContent | Set-Content $projectPath -NoNewline
     
     # Make sure the project is restored first
     dotnet restore $projectPath
