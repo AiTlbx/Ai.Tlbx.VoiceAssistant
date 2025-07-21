@@ -24,23 +24,5 @@ namespace Ai.Tlbx.VoiceAssistant.Extensions
             
             return new VoiceAssistantBuilder(services);
         }
-
-        /// <summary>
-        /// Adds voice assistant services to the service collection with fluent configuration and logging.
-        /// </summary>
-        /// <param name="services">The service collection to add services to.</param>
-        /// <param name="logAction">Action for logging voice assistant operations.</param>
-        /// <returns>A voice assistant builder for fluent configuration.</returns>
-        public static VoiceAssistantBuilder AddVoiceAssistant(this IServiceCollection services, Action<LogLevel, string> logAction)
-        {
-            // Register logging action
-            services.AddSingleton(logAction);
-            
-            // Register core services
-            services.AddScoped<ChatHistoryManager>();
-            services.AddScoped<VoiceAssistant>();
-            
-            return new VoiceAssistantBuilder(services);
-        }
     }
 }

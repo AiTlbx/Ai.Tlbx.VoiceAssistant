@@ -27,10 +27,11 @@ public class Program
 
 
         // Configure VoiceAssistant with fluent DI pattern
-        builder.Services.AddVoiceAssistant((level, message) => Debug.WriteLine($"[{level}] {message}"))
+        builder.Services.AddVoiceAssistant()
             .WithHardware<WebAudioAccess>()
             .AddTool<TimeTool>()  // Add the time tool
-            .WithOpenAi();
+            .WithOpenAi()
+            .WithLogging((level, message) => Debug.WriteLine($"[{level}] {message}"));
         
         builder.Services.AddSignalR(options =>
         {

@@ -32,9 +32,7 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.OpenAi.Extensions
                 // Pre-configure with tools if any are registered
                 if (tools.Any())
                 {
-                    var settings = provider.GetService<OpenAiVoiceSettings>() ?? 
-                                  provider.GetService<Func<OpenAiVoiceSettings>>()?.Invoke() ?? 
-                                  CreateDefaultOpenAiSettings();
+                    var settings = CreateDefaultOpenAiSettings();
                     
                     // Add tools to settings
                     foreach (var tool in tools.Where(t => !settings.Tools.Any(st => st.Name == t.Name)))
@@ -49,36 +47,6 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.OpenAi.Extensions
             });
             
             return builder;
-        }
-
-        /// <summary>
-        /// Adds the OpenAI voice provider with custom settings to the voice assistant configuration.
-        /// </summary>
-        /// <param name="builder">The voice assistant builder.</param>
-        /// <param name="settingsFactory">Factory function to create OpenAI settings.</param>
-        /// <param name="apiKey">Optional OpenAI API key. If not provided, will use OPENAI_API_KEY environment variable.</param>
-        /// <returns>The builder instance for method chaining.</returns>
-        public static VoiceAssistantBuilder WithOpenAi(this VoiceAssistantBuilder builder, 
-            Func<OpenAiVoiceSettings> settingsFactory, 
-            string? apiKey = null)
-        {
-            builder.Services.AddSingleton(settingsFactory);
-            return builder.WithOpenAi(apiKey);
-        }
-
-        /// <summary>
-        /// Adds the OpenAI voice provider with pre-configured settings to the voice assistant configuration.
-        /// </summary>
-        /// <param name="builder">The voice assistant builder.</param>
-        /// <param name="settings">Pre-configured OpenAI settings.</param>
-        /// <param name="apiKey">Optional OpenAI API key. If not provided, will use OPENAI_API_KEY environment variable.</param>
-        /// <returns>The builder instance for method chaining.</returns>
-        public static VoiceAssistantBuilder WithOpenAi(this VoiceAssistantBuilder builder, 
-            OpenAiVoiceSettings settings, 
-            string? apiKey = null)
-        {
-            builder.Services.AddSingleton(settings);
-            return builder.WithOpenAi(apiKey);
         }
 
         /// <summary>

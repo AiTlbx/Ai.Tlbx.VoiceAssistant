@@ -70,15 +70,15 @@ Here's a minimal example to get you started:
 using Ai.Tlbx.VoiceAssistant;
 using Ai.Tlbx.VoiceAssistant.Provider.OpenAi;
 using Ai.Tlbx.VoiceAssistant.Provider.OpenAi.Models;
+using Ai.Tlbx.VoiceAssistant.Provider.OpenAi.Extensions;
+using Ai.Tlbx.VoiceAssistant.Hardware.Windows; // or .Hardware.Linux or .Hardware.Web
 using Microsoft.Extensions.DependencyInjection;
 
 // Configure services
 var services = new ServiceCollection();
-services.AddVoiceAssistant(builder =>
-{
-    builder.UseOpenAi(apiKey: "your-api-key-here")
-           .UseWindowsHardware(); // or UseLinuxHardware() or UseWebHardware()
-});
+services.AddVoiceAssistant()
+    .WithOpenAi(apiKey: "your-api-key-here")
+    .WithHardware<WindowsAudioDevice>(); // or WithHardware<LinuxAudioDevice>() or WithHardware<WebAudioAccess>()
 
 var serviceProvider = services.BuildServiceProvider();
 var voiceAssistant = serviceProvider.GetRequiredService<VoiceAssistant>();
@@ -129,11 +129,9 @@ class Program
         });
         
         // Configure voice assistant
-        services.AddVoiceAssistant(builder =>
-        {
-            builder.UseOpenAi(apiKey: Environment.GetEnvironmentVariable("OPENAI_API_KEY"))
-                   .UseWindowsHardware();
-        });
+        services.AddVoiceAssistant()
+            .WithOpenAi(apiKey: Environment.GetEnvironmentVariable("OPENAI_API_KEY"))
+            .WithHardware<WindowsAudioDevice>();
         
         var serviceProvider = services.BuildServiceProvider();
         var voiceAssistant = serviceProvider.GetRequiredService<VoiceAssistant>();
@@ -205,11 +203,9 @@ public partial class MainForm : Form
         
         // Set up DI
         var services = new ServiceCollection();
-        services.AddVoiceAssistant(builder =>
-        {
-            builder.UseOpenAi(apiKey: Environment.GetEnvironmentVariable("OPENAI_API_KEY"))
-                   .UseWindowsHardware();
-        });
+        services.AddVoiceAssistant()
+            .WithOpenAi(apiKey: Environment.GetEnvironmentVariable("OPENAI_API_KEY"))
+            .WithHardware<WindowsAudioDevice>();
         
         _serviceProvider = services.BuildServiceProvider();
         _voiceAssistant = _serviceProvider.GetRequiredService<VoiceAssistant>();
@@ -357,11 +353,9 @@ class Program
         });
         
         // Configure voice assistant
-        services.AddVoiceAssistant(builder =>
-        {
-            builder.UseOpenAi(apiKey: Environment.GetEnvironmentVariable("OPENAI_API_KEY"))
-                   .UseLinuxHardware();
-        });
+        services.AddVoiceAssistant()
+            .WithOpenAi(apiKey: Environment.GetEnvironmentVariable("OPENAI_API_KEY"))
+            .WithHardware<LinuxAudioDevice>();
         
         var serviceProvider = services.BuildServiceProvider();
         var voiceAssistant = serviceProvider.GetRequiredService<VoiceAssistant>();
@@ -448,11 +442,9 @@ public class MainWindow : Window
     {
         // Set up DI
         var services = new ServiceCollection();
-        services.AddVoiceAssistant(builder =>
-        {
-            builder.UseOpenAi(apiKey: Environment.GetEnvironmentVariable("OPENAI_API_KEY"))
-                   .UseLinuxHardware();
-        });
+        services.AddVoiceAssistant()
+            .WithOpenAi(apiKey: Environment.GetEnvironmentVariable("OPENAI_API_KEY"))
+            .WithHardware<LinuxAudioDevice>();
         
         var serviceProvider = services.BuildServiceProvider();
         _voiceAssistant = serviceProvider.GetRequiredService<VoiceAssistant>();
@@ -605,11 +597,9 @@ builder.Services.AddRazorPages();
 builder.Services.AddServerSideBlazor();
 
 // Configure Voice Assistant
-builder.Services.AddVoiceAssistant(voiceBuilder =>
-{
-    voiceBuilder.UseOpenAi(apiKey: builder.Configuration["OpenAI:ApiKey"])
-                .UseWebHardware();
-});
+builder.Services.AddVoiceAssistant()
+    .WithOpenAi(apiKey: builder.Configuration["OpenAI:ApiKey"])
+    .WithHardware<WebAudioAccess>();
 
 var app = builder.Build();
 
@@ -1063,17 +1053,14 @@ settings.Tools.Add(new WeatherTool());
 The toolkit uses a centralized logging architecture. Configure logging at the orchestrator level:
 
 ```csharp
-services.AddVoiceAssistant(builder =>
-{
-    builder.UseOpenAi(apiKey: "...")
-           .UseWindowsHardware()
-           .ConfigureLogging((provider, log) =>
-           {
-               // Custom logging logic
-               var logger = provider.GetService<ILogger<VoiceAssistant>>();
-               logger?.Log(log.Level.ToMicrosoftLogLevel(), log.Message);
-           });
-});
+services.AddVoiceAssistant()
+    .WithOpenAi(apiKey: "...")
+    .WithHardware<WindowsAudioDevice>()
+    .WithLogging((level, message) =>
+    {
+        // Custom logging logic
+        Console.WriteLine($"[{level}] {message}");
+    });
 ```
 
 ### Conversation History
@@ -1209,11 +1196,9 @@ await openAiAccess.ConnectAsync();
 
 **v4.0 Code:**
 ```csharp
-services.AddVoiceAssistant(builder =>
-{
-    builder.UseOpenAi(apiKey)
-           .UseWindowsHardware();
-});
+services.AddVoiceAssistant()
+    .WithOpenAi(apiKey)
+    .WithHardware<WindowsAudioDevice>();
 
 var voiceAssistant = serviceProvider.GetRequiredService<VoiceAssistant>();
 voiceAssistant.OnMessageAdded = OnMessageAdded;
