@@ -98,7 +98,7 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.OpenAi.Extensions
                 Instructions = instructions,
                 Voice = voice,
                 Temperature = temperature,
-                Model = "gpt-4o-realtime-preview-2025-06-03",
+                Model = OpenAiRealtimeModel.Gpt4oRealtimePreview20250603,
                 TurnDetection = new TurnDetection
                 {
                     Type = "server_vad",

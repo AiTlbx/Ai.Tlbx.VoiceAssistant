@@ -14,7 +14,7 @@ namespace Ai.Tlbx.VoiceAssistant.Demo.Linux
         private static VoiceAssistant? _voiceAssistant;
         private static OpenAiVoiceProvider? _voiceProvider;
         private static string _openAiApiKey = string.Empty;
-        private static string _openAiModel = "gpt-4o";
+        private static OpenAiRealtimeModel _openAiModel = OpenAiRealtimeModel.Gpt4oRealtimePreview20250603;
         private static readonly ManualResetEvent _exitEvent = new ManualResetEvent(false);
         private static readonly CancellationTokenSource _cts = new CancellationTokenSource();
 
@@ -113,7 +113,16 @@ namespace Ai.Tlbx.VoiceAssistant.Demo.Linux
                         
                         if (openAi.TryGetProperty("Model", out var model))
                         {
-                            _openAiModel = model.GetString() ?? "gpt-4o";
+                            // Parse the model string from config if possible
+                            var modelString = model.GetString() ?? "";
+                            _openAiModel = modelString switch
+                            {
+                                "gpt-4o-realtime-preview-2025-06-03" => OpenAiRealtimeModel.Gpt4oRealtimePreview20250603,
+                                "gpt-4o-realtime-preview-2024-12-17" => OpenAiRealtimeModel.Gpt4oRealtimePreview20241217,
+                                "gpt-4o-realtime-preview-2024-10-01" => OpenAiRealtimeModel.Gpt4oRealtimePreview20241001,
+                                "gpt-4o-mini-realtime-preview-2024-12-17" => OpenAiRealtimeModel.Gpt4oMiniRealtimePreview20241217,
+                                _ => OpenAiRealtimeModel.Gpt4oRealtimePreview20250603 // Default to latest
+                            };
                         }
                     }
                 }
@@ -155,9 +164,7 @@ namespace Ai.Tlbx.VoiceAssistant.Demo.Linux
                                 logAction(LogLevel.Info, "Starting conversation...");
                                 var settings = new OpenAiVoiceSettings
                                 {
-                                    Instructions = !string.IsNullOrEmpty(_openAiModel) 
-                                        ? $"You are a helpful AI assistant using the {_openAiModel} model. Be friendly, conversational, helpful, and engaging. When the user speaks interrupt your answer and listen and then answer the new question."
-                                        : "You are a helpful AI assistant. Be friendly, conversational, helpful, and engaging.",
+                                    Instructions = "You are a helpful AI assistant. Be friendly, conversational, helpful, and engaging. When the user speaks interrupt your answer and listen and then answer the new question.",
                                     Voice = AssistantVoice.Alloy,
                                     Model = _openAiModel
                                 };

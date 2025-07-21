@@ -123,7 +123,7 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.OpenAi
 
                 _cts = new CancellationTokenSource(CONNECTION_TIMEOUT_MS);
 
-                var uri = new Uri($"{REALTIME_WEBSOCKET_ENDPOINT}?model={_settings.Model}");
+                var uri = new Uri($"{REALTIME_WEBSOCKET_ENDPOINT}?model={_settings.Model.ToApiString()}");
                 await _webSocket.ConnectAsync(uri, _cts.Token);
 
                 _logAction(LogLevel.Info, "WebSocket connection established");
@@ -295,7 +295,7 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.OpenAi
 
             var session = new Dictionary<string, object>
             {
-                ["model"] = _settings.Model,
+                ["model"] = _settings.Model.ToApiString(),
                 ["voice"] = _settings.Voice.ToString().ToLowerInvariant(),
                 ["instructions"] = _settings.Instructions,
                 ["temperature"] = _settings.Temperature,

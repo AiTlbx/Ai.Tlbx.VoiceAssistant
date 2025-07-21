@@ -21,7 +21,7 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.OpenAi.Models
         /// <summary>
         /// The OpenAI model to use for the conversation.
         /// </summary>
-        public string Model { get; set; } = "gpt-4o-realtime-preview-2025-06-03";
+        public OpenAiRealtimeModel Model { get; set; } = OpenAiRealtimeModel.Gpt4oRealtimePreview20250603;
 
         /// <summary>
         /// The voice to use for AI responses.
