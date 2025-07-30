@@ -7,7 +7,7 @@
     
     <!-- NuGet Package Metadata -->
     <PackageId>Ai.Tlbx.VoiceAssistant.Hardware.Windows</PackageId>
-    <Version>4.0.1</Version>
+    <Version>4.0.2</Version>
     <Authors>Johannes Schmidt</Authors>
     <Company>TLBX</Company>
     <Description>Windows-specific hardware integration for voice assistant audio processing</Description>
