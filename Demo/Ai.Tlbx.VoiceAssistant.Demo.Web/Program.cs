@@ -1,12 +1,7 @@
 using Ai.Tlbx.VoiceAssistant.Demo.Web.Components;
-using Ai.Tlbx.VoiceAssistant;
 using Ai.Tlbx.VoiceAssistant.Extensions;
-using Ai.Tlbx.VoiceAssistant.Interfaces;
 using Ai.Tlbx.VoiceAssistant.Hardware.Web;
-using Ai.Tlbx.VoiceAssistant.Provider.OpenAi;
 using Ai.Tlbx.VoiceAssistant.Provider.OpenAi.Extensions;
-using Ai.Tlbx.VoiceAssistant.WebUi;
-using Ai.Tlbx.VoiceAssistant.Models;
 using Ai.Tlbx.VoiceAssistant.BuiltInTools;
 using System.Diagnostics;
 using Microsoft.AspNetCore.Builder;
@@ -29,7 +24,8 @@ public class Program
         // Configure VoiceAssistant with fluent DI pattern
         builder.Services.AddVoiceAssistant()
             .WithHardware<WebAudioAccess>()
-            .AddTool<TimeTool>()  // Add the time tool
+            // Add all built-in tools (includes both basic and advanced tools)
+            .AddBuiltInTools(includeAdvanced: true)
             .WithOpenAi()
             .WithLogging((level, message) => Debug.WriteLine($"[{level}] {message}"));
         

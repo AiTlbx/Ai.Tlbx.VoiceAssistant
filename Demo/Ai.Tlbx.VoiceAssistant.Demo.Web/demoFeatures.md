@@ -13,8 +13,12 @@ The list below captures the functional and visual features presently implemented
   - Drop-down of available microphones (dynamic enumeration)
   - Refresh/permission button to request mic access
   - Inline hints for permission state, selected device, loading status
-- **Feature Toggles**
-  - `Enable Current Time Tool` checkbox (toggles usage of `CurrentTimeTool`)
+- **Tool Selection Panel**
+  - Dynamic tool selector component showing all registered tools
+  - Individual checkboxes for each tool with name and description
+  - Select All / Deselect All convenience buttons
+  - Tools can be enabled/disabled before starting a session
+  - Built-in tools include: TimeTool, TimeToolWithSchema, WeatherTool, WeatherLookupTool, CalculatorTool
 - **Utility Buttons**
   - `Clear Chat` (purges chat history UI + model)
   - `Test Microphone` (starts/stops loopback test via JS interop)

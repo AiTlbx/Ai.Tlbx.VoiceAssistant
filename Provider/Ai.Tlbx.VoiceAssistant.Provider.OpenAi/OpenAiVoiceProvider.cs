@@ -343,7 +343,7 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.OpenAi
                     type = "function",
                     name = tool.Name,
                     description = tool.Description,
-                    parameters = new { type = "object", properties = new { } }
+                    parameters = GetToolParameters(tool)
                 }).ToArray()
             };
 
@@ -562,9 +562,14 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.OpenAi
                         // Send the tool result back to OpenAI
                         await SendToolResultAsync(callId, result);
                         
-                        // Add a message to chat history
-                        var toolMessage = ChatMessage.CreateAssistantMessage($"[Tool: {functionName}] {result}");
-                        OnMessageReceived?.Invoke(toolMessage);
+                        // Add tool call message to chat history
+                        var formattedArgs = FormatToolArguments(argumentsJson);
+                        var toolCallMessage = ChatMessage.CreateAssistantMessage($"Calling tool: {functionName}\nArguments: {formattedArgs}");
+                        OnMessageReceived?.Invoke(toolCallMessage);
+                        
+                        // Add tool response message to chat history
+                        var toolResponseMessage = ChatMessage.CreateToolMessage(functionName, result, callId);
+                        OnMessageReceived?.Invoke(toolResponseMessage);
                     }
                     catch (Exception ex)
                     {
@@ -723,6 +728,102 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.OpenAi
             {
                 _logAction(LogLevel.Info, "No active response to interrupt");
             }
+        }
+
+        private object GetToolParameters(IVoiceTool tool)
+        {
+            if (tool is IVoiceToolWithSchema schemaTools)
+            {
+                var schema = schemaTools.GetParameterSchema();
+                return new
+                {
+                    type = schema.Type,
+                    properties = schema.Properties?.ToDictionary(
+                        kvp => kvp.Key,
+                        kvp => SerializeParameterProperty(kvp.Value)
+                    ) ?? new Dictionary<string, object>(),
+                    required = schema.Required ?? new List<string>(),
+                    additionalProperties = schema.AdditionalProperties
+                };
+            }
+            
+            // Fallback for tools without schema (maintains backward compatibility)
+            return new { type = "object", properties = new { } };
+        }
+        
+        private string FormatToolArguments(string argumentsJson)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(argumentsJson) || argumentsJson == "{}")
+                {
+                    return "(no arguments)";
+                }
+                
+                // Try to parse and format the JSON
+                using var jsonDoc = JsonDocument.Parse(argumentsJson);
+                var formatted = JsonSerializer.Serialize(jsonDoc, new JsonSerializerOptions 
+                { 
+                    WriteIndented = true 
+                });
+                
+                // If it's a simple single-line JSON, keep it inline
+                if (!formatted.Contains('\n') || formatted.Length < 50)
+                {
+                    return argumentsJson;
+                }
+                
+                return formatted;
+            }
+            catch
+            {
+                return argumentsJson;
+            }
+        }
+
+        private object SerializeParameterProperty(ParameterProperty property)
+        {
+            var result = new Dictionary<string, object>
+            {
+                ["type"] = property.Type
+            };
+
+            if (!string.IsNullOrEmpty(property.Description))
+                result["description"] = property.Description;
+
+            if (property.Enum != null && property.Enum.Count > 0)
+                result["enum"] = property.Enum;
+
+            if (property.Default != null)
+                result["default"] = property.Default;
+
+            if (property.Properties != null && property.Properties.Count > 0)
+            {
+                result["properties"] = property.Properties.ToDictionary(
+                    kvp => kvp.Key,
+                    kvp => SerializeParameterProperty(kvp.Value)
+                );
+            }
+
+            if (property.Items != null)
+                result["items"] = SerializeParameterProperty(property.Items);
+
+            if (property.Minimum.HasValue)
+                result["minimum"] = property.Minimum.Value;
+
+            if (property.Maximum.HasValue)
+                result["maximum"] = property.Maximum.Value;
+
+            if (property.MinLength.HasValue)
+                result["minLength"] = property.MinLength.Value;
+
+            if (property.MaxLength.HasValue)
+                result["maxLength"] = property.MaxLength.Value;
+
+            if (!string.IsNullOrEmpty(property.Pattern))
+                result["pattern"] = property.Pattern;
+
+            return result;
         }
 
         /// <summary>

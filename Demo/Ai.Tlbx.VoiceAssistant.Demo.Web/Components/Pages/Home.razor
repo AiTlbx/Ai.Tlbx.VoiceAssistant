@@ -5,11 +5,14 @@
 @using Ai.Tlbx.VoiceAssistant.WebUi.Components
 @using Ai.Tlbx.VoiceAssistant.Demo.Web
 @using Ai.Tlbx.VoiceAssistant.Models
+@using Ai.Tlbx.VoiceAssistant.Interfaces
 @using System.Diagnostics
+@using Microsoft.Extensions.DependencyInjection
 
 @rendermode InteractiveServer
 @inject VoiceAssistant voiceAssistant
 @inject IJSRuntime JS
+@inject IServiceProvider ServiceProvider
 @implements IDisposable
 
 <PageTitle>AI Voice Chat</PageTitle>
@@ -44,6 +47,13 @@
                                 <!-- Voice Speed -->
                                 <VoiceSpeedSlider SelectedSpeed="@currentVoiceSpeed" SelectedSpeedChanged="OnVoiceSpeedChanged" Disabled="@(voiceAssistant.IsConnecting || voiceAssistant.IsRecording)" />
 
+                                <!-- Tool Selection -->
+                                <div>
+                                    <ToolSelector AvailableTools="@availableTools" 
+                                                 @bind-EnabledTools="@enabledTools" 
+                                                 Disabled="@(voiceAssistant.IsConnecting || voiceAssistant.IsRecording)" />
+                                </div>
+
                                 <!-- Microphone Selection -->
                                 <div>
                                     <label class="block text-xs font-medium text-gray-600 mb-1">Microphone</label>
@@ -52,14 +62,6 @@
                                                      MicPermissionGranted="micPermissionGranted" 
                                                      OnRequestPermission="RequestMicrophonePermission" 
                                                      Disabled="@(voiceAssistant.IsConnecting || voiceAssistant.IsRecording)" />
-                                </div>
-
-                                <!-- Options -->
-                                <div class="flex items-center">
-                                    <input type="checkbox" id="timeToolCheck" class="h-3 w-3 text-blue-600 border-gray-300 rounded focus:ring-1 focus:ring-blue-500 mr-2" 
-                                    @bind="useTimeTool" 
-                                    disabled="@voiceAssistant.IsRecording"> 
-                                    <label for="timeToolCheck" class="text-xs text-gray-600 cursor-pointer">Enable time tool</label>
                                 </div>
 
                                 <!-- Action Buttons -->
@@ -150,8 +152,11 @@
         }
     }
     private double currentVoiceSpeed = 1.0;
-    private bool useTimeTool = true;
     private List<string> availableVoices = Enum.GetValues<AssistantVoice>().Select(v => v.ToString()).ToList();
+    
+    // Tool management
+    private List<IVoiceTool> availableTools = new();
+    private List<IVoiceTool> enabledTools = new();
     
     // Microphone selection related fields
     private List<MicrophoneSelect.MicrophoneInfo> availableMicrophones = new();
@@ -170,6 +175,13 @@
         // Initialize the string value based on the current enum value
         // Note: CurrentVoice is not exposed by VoiceAssistant
         // currentVoiceString = voiceAssistant.CurrentVoice.ToString().ToLower();
+        
+        // Get all registered tools from DI
+        availableTools = ServiceProvider.GetServices<IVoiceTool>().ToList();
+        Log(LogLevel.Info, $"Found {availableTools.Count} available tools: {string.Join(", ", availableTools.Select(t => t.Name))}");
+        
+        // Enable all tools by default
+        enabledTools = availableTools.ToList();
 
         // Don't check for microphone permission in OnInitializedAsync (during prerender)
         // We'll do that in OnAfterRenderAsync instead
@@ -438,20 +450,13 @@
             }
 
             // Get current settings or create new settings
-            // TODO: Implement TimeTool with IVoiceTool interface
-            //var tools = new List<IVoiceTool>();
-            //if (useTimeTool)
-            //{
-            //    tools.Add(new TimeTool());
-            //}
-
             var settings = new OpenAiVoiceSettings
             {
                 Instructions = "You are a helpful AI assistant. Be friendly, conversational, helpful, and engaging.",
                 Voice = currentVoice,
                 TalkingSpeed = currentVoiceSpeed,
-                Model = OpenAiRealtimeModel.Gpt4oRealtimePreview20250603
-                // Tools = tools
+                Model = OpenAiRealtimeModel.Gpt4oRealtimePreview20250603,
+                Tools = enabledTools.ToList() // Use the selected tools
             };
             
             Log(LogLevel.Info, $"Starting session with voice: {currentVoice}");

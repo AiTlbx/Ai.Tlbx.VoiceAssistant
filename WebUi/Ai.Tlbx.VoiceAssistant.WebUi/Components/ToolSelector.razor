@@ -1,0 +1,110 @@
+@using Ai.Tlbx.VoiceAssistant.Interfaces
+
+<div class="tool-selector">
+    <label class="block text-xs font-medium text-gray-600 mb-2">Available Tools</label>
+    
+    <div class="space-y-2 max-h-48 overflow-y-auto p-2 bg-gray-50 rounded-md border border-gray-200">
+        @if (AvailableTools != null && AvailableTools.Any())
+        {
+            @foreach (var tool in AvailableTools)
+            {
+                <div class="flex items-start">
+                    <input type="checkbox" 
+                           id="tool-@tool.Name" 
+                           class="h-3 w-3 text-blue-600 border-gray-300 rounded focus:ring-1 focus:ring-blue-500 mt-0.5 mr-2"
+                           checked="@IsToolEnabled(tool)"
+                           @onchange="@((e) => OnToolToggled(tool, (bool)e.Value!))"
+                           disabled="@Disabled">
+                    <label for="tool-@tool.Name" class="flex-1 cursor-pointer @(Disabled ? "opacity-50" : "")">
+                        <div class="text-xs font-medium text-gray-700">@tool.Name</div>
+                        <div class="text-xs text-gray-500">@tool.Description</div>
+                    </label>
+                </div>
+            }
+        }
+        else
+        {
+            <div class="text-xs text-gray-500 italic">No tools available</div>
+        }
+    </div>
+    
+    @if (ShowSelectAllControls)
+    {
+        <div class="mt-2 flex gap-2">
+            <button type="button" 
+                    class="text-xs text-blue-600 hover:text-blue-700 font-medium"
+                    @onclick="SelectAll"
+                    disabled="@Disabled">
+                Select All
+            </button>
+            <span class="text-xs text-gray-400">|</span>
+            <button type="button" 
+                    class="text-xs text-blue-600 hover:text-blue-700 font-medium"
+                    @onclick="DeselectAll"
+                    disabled="@Disabled">
+                Deselect All
+            </button>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public List<IVoiceTool>? AvailableTools { get; set; }
+    [Parameter] public List<IVoiceTool>? EnabledTools { get; set; }
+    [Parameter] public EventCallback<List<IVoiceTool>> EnabledToolsChanged { get; set; }
+    [Parameter] public bool Disabled { get; set; }
+    [Parameter] public bool ShowSelectAllControls { get; set; } = true;
+
+    private HashSet<string> _enabledToolNames = new();
+
+    protected override void OnParametersSet()
+    {
+        // Update the internal set of enabled tool names
+        _enabledToolNames = EnabledTools?.Select(t => t.Name).ToHashSet() ?? new HashSet<string>();
+    }
+
+    private bool IsToolEnabled(IVoiceTool tool)
+    {
+        return _enabledToolNames.Contains(tool.Name);
+    }
+
+    private async Task OnToolToggled(IVoiceTool tool, bool isEnabled)
+    {
+        if (isEnabled)
+        {
+            _enabledToolNames.Add(tool.Name);
+        }
+        else
+        {
+            _enabledToolNames.Remove(tool.Name);
+        }
+
+        // Create new list of enabled tools based on current selection
+        var newEnabledTools = AvailableTools?
+            .Where(t => _enabledToolNames.Contains(t.Name))
+            .ToList() ?? new List<IVoiceTool>();
+
+        await EnabledToolsChanged.InvokeAsync(newEnabledTools);
+    }
+
+    private async Task SelectAll()
+    {
+        if (AvailableTools != null)
+        {
+            _enabledToolNames = AvailableTools.Select(t => t.Name).ToHashSet();
+            await EnabledToolsChanged.InvokeAsync(AvailableTools.ToList());
+        }
+    }
+
+    private async Task DeselectAll()
+    {
+        _enabledToolNames.Clear();
+        await EnabledToolsChanged.InvokeAsync(new List<IVoiceTool>());
+    }
+}
+
+<style>
+    .tool-selector {
+        /* Component-specific styles if needed */
+    }
+</style>

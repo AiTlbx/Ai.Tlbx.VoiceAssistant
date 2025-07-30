@@ -13,7 +13,15 @@ This demo application has been refactored to use reusable Razor components from 
 - Start/stop voice recording controls
 - Voice selection for AI responses
 - Microphone device selection
-- Optional tool usage (Current Time Tool demo)
+- **Dynamic Tool Selection**:
+  - Enable/disable tools before starting a session
+  - Select from all registered built-in tools
+  - Built-in tools include:
+    - TimeTool - Basic time functionality (backward compatible)
+    - TimeToolWithSchema - Advanced time with timezone support
+    - WeatherTool - Get weather with location and unit options
+    - WeatherLookupTool - Advanced weather with time queries
+    - CalculatorTool - Mathematical operations (add, subtract, multiply, divide, power, modulo)
 - Chat history display with message types (user, AI, tool calls)
 
 ### Testing & Diagnostics
@@ -44,6 +52,7 @@ This demo showcases how to use the RCL components:
 - **ChatWidget** - Display conversation history
 - **MicrophoneSelect** - Device selection with permission handling
 - **VoiceSelect** - AI voice selection
+- **ToolSelector** - Enable/disable AI tools dynamically
 - **StatusWidget** - Display connection status and errors
 - **MicTestWidget** - Test microphone functionality
 - **DiagnosticsWidget** - Show real-time audio diagnostics
@@ -54,6 +63,7 @@ The demo provides a complete reference implementation showing how to:
 - Initialize and configure the OpenAI Real-Time API access
 - Handle microphone permissions and device selection
 - Manage voice chat sessions
+- Dynamically enable/disable AI tools per session
 - Display various message types in the chat interface
 - Provide helpful status feedback to users
 
@@ -103,6 +113,19 @@ This demo uses UI components from the `Ai.Tlbx.RealTime.WebUi` Razor Class Libra
 - `ToastNotification` - non-blocking alerts
 
 The RCL components depend on JavaScript interop with the Web Audio API, as implemented in `webAudioAccess.js`.
+
+## Example Voice Commands
+
+Try these commands to test the AI tools:
+
+- "What's the current time?"
+- "What's the weather in Paris?"
+- "Tell me the weather forecast for Tokyo tomorrow"
+- "What will the weather be like in London at 3pm?"
+- "Give me a detailed weather report for New York"
+- "Calculate 25 times 17"
+- "What's 100 divided by 7?"
+- "What's 2 to the power of 10?"
 
 ## Troubleshooting
 
