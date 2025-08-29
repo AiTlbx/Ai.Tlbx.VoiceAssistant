@@ -7,33 +7,39 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.OpenAi.Models
     /// </summary>
     public enum OpenAiRealtimeModel
     {
+        
+        /// <summary>
+        /// First full release based on GPT5
+        /// </summary>
+        Gpt520250828, 
+
         /// <summary>
         /// GPT-4 Omni Realtime Preview - Latest version (June 2025).
         /// This is the most recent and recommended model for voice interactions.
         /// Released: 2025-06-03
         /// </summary>
-        Gpt4oRealtimePreview20250603 = 0,
+        Gpt4oRealtimePreview20250603,
         
         /// <summary>
         /// GPT-4 Omni Realtime Preview - December 2024 version.
         /// Stable release with improved voice quality.
         /// Released: 2024-12-17
         /// </summary>
-        Gpt4oRealtimePreview20241217 = 1,
+        Gpt4oRealtimePreview20241217,
         
         /// <summary>
         /// GPT-4 Omni Realtime Preview - October 2024 version.
         /// Earlier stable release, maintained for compatibility.
         /// Released: 2024-10-01
         /// </summary>
-        Gpt4oRealtimePreview20241001 = 2,
+        Gpt4oRealtimePreview20241001,
         
         /// <summary>
         /// GPT-4 Omni Mini Realtime Preview - December 2024 version.
         /// Smaller, faster model optimized for lower latency.
         /// Released: 2024-12-17
         /// </summary>
-        Gpt4oMiniRealtimePreview20241217 = 3,
+        Gpt4oMiniRealtimePreview20241217,
     }
     
     /// <summary>
@@ -50,6 +56,7 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.OpenAi.Models
         {
             return model switch
             {
+                OpenAiRealtimeModel.Gpt520250828 => "gpt-realtime-2025-08-28",
                 OpenAiRealtimeModel.Gpt4oRealtimePreview20250603 => "gpt-4o-realtime-preview-2025-06-03",
                 OpenAiRealtimeModel.Gpt4oRealtimePreview20241217 => "gpt-4o-realtime-preview-2024-12-17",
                 OpenAiRealtimeModel.Gpt4oRealtimePreview20241001 => "gpt-4o-realtime-preview-2024-10-01",

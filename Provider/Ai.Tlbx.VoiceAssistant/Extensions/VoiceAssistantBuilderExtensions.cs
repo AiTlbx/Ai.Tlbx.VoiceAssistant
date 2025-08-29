@@ -70,9 +70,9 @@ namespace Ai.Tlbx.VoiceAssistant.Extensions
             // Add advanced tools if requested
             if (includeAdvanced)
             {
-                builder.AddTool<BuiltInTools.TimeToolWithSchema>();
+                //builder.AddTool<BuiltInTools.TimeToolWithSchema>();
                 builder.AddTool<BuiltInTools.WeatherTool>();
-                builder.AddTool<BuiltInTools.WeatherLookupTool>();
+                //builder.AddTool<BuiltInTools.WeatherLookupTool>();
                 builder.AddTool<BuiltInTools.CalculatorTool>();
             }
 

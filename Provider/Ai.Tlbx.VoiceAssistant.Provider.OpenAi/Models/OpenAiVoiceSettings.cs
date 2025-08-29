@@ -35,6 +35,11 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.OpenAi.Models
         public double TalkingSpeed { get; set; } = 1.0;
 
         /// <summary>
+        /// Used only for semantic_vad mode. The eagerness of the model to respond. low will wait longer for the user to continue speaking, high will respond more quickly. auto is the default and is equivalent to medium
+        /// </summary>
+        public Eagerness Eagerness { get; set; } = Eagerness.auto;
+
+        /// <summary>
         /// The temperature setting for response generation (0.0 to 1.0).
         /// </summary>
         public double Temperature { get; set; } = 0.7;
@@ -48,6 +53,12 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.OpenAi.Models
         /// Turn detection settings for conversation flow.
         /// </summary>
         public TurnDetection TurnDetection { get; set; } = new();
+
+        public string MostLikelySpokenLanguage { get; set; } = "de";
+
+        public string TranscriptionHint { get; set; } = "expect german business/IT/Contstruction and Tender law terms";
+
+        public string TransscribeModel { get; set; } = "gpt-4o-transcribe-latest";
 
         /// <summary>
         /// Input audio transcription settings.
@@ -72,7 +83,9 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.OpenAi.Models
         Echo,
         Sage,
         Shimmer,
-        Verse
+        Verse,
+        Marin,
+        Cedar
     }
 
     /// <summary>
@@ -99,6 +112,16 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.OpenAi.Models
         /// Silence duration in milliseconds before considering turn complete.
         /// </summary>
         public int SilenceDurationMs { get; set; } = 200;
+
+        /// <summary>
+        /// Model should generate a response for everything
+        /// </summary>
+        public bool CreateResponse { get; set; } = true;
+
+        /// <summary>
+        /// Model is interruptable
+        /// </summary>
+        public bool InterruptResponse { get; set; } = true;        
     }
 
     /// <summary>

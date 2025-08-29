@@ -348,10 +348,7 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.OpenAi
             };
 
             // Only add max_response_output_tokens if it has a value
-            if (_settings.MaxTokens.HasValue)
-            {
-                session["max_response_output_tokens"] = _settings.MaxTokens.Value;
-            }
+            session["max_response_output_tokens"] = _settings.MaxTokens.HasValue ? _settings.MaxTokens.Value : "inf";
 
             var sessionConfig = new
             {

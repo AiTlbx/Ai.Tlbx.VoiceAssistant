@@ -113,7 +113,7 @@ Version is tracked in `version.txt` and auto-incremented by `publish-nuget.ps1`.
 
 ### Logging Strategy
 
-This codebase uses a **centralized logging architecture** detailed in [`LoggingStrategy.md`](LoggingStrategy.md). 
+This codebase uses a **centralized logging architecture** where all logging flows from lower layers up to the orchestrator.
 
 **⚠️ CRITICAL: DO NOT USE ILogger<T> OR Microsoft.Extensions.Logging**
 
@@ -123,16 +123,25 @@ All logging flows from lower layers up to the orchestrator where users configure
 - Simplifies testing and debugging
 - Prevents tight coupling to Microsoft logging
 
-Always use `Action<LogLevel, string>` for logging delegation and forward logs up through natural architectural layers.
+Always use `Action<LogLevel, string>` for logging delegation and forward logs up through natural architectural layers. The LogLevel enum is defined in the Models namespace with three levels: Error, Warn, and Info.
+
+### Testing Strategy
+
+- No automated tests are currently included
+- Testing is performed through the demo applications in `/Demo` folder
+- Each platform has its own demo for validation:
+  - Windows: `Demo/Ai.Tlbx.VoiceAssistant.Demo.Windows/`
+  - Linux: `Demo/Ai.Tlbx.VoiceAssistant.Demo.Linux/`
+  - Web: `Demo/Ai.Tlbx.VoiceAssistant.Demo.Web/`
 
 ### Important Notes
 
 - The project targets .NET 9.0
-- Version 4.0 introduces breaking changes from v3.x
-- No automated tests are currently included - testing is done via demo applications
+- Version 4.0 introduces breaking changes from v3.x (current version in `version.txt`)
 - Windows components require Windows 10 or later
 - Linux components require libasound (ALSA) to be installed
 - Web components require HTTPS or localhost for microphone access due to browser security
 - JavaScript audio worklet processors handle real-time audio processing in web implementation
 - Solution uses the new .slnx format (TLBX.Ai.VoiceAssistant.slnx)
 - Publishing requires NUGET_API_KEY environment variable for NuGet.org uploads
+- Legacy code from v3.x may exist in `Provider/Ai.Tlbx.RealTimeAudio.OpenAi/` - this is being phased out

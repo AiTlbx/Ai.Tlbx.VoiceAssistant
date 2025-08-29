@@ -452,10 +452,10 @@
             // Get current settings or create new settings
             var settings = new OpenAiVoiceSettings
             {
-                Instructions = "You are a helpful AI assistant. Be friendly, conversational, helpful, and engaging.",
+                Instructions = "Du bist ein freundlicher hilfreicher sprachagent. (Antworte in der Anfragesprache, im Zweifel bitte in Deutsch), Nimm an dein Gegenüber ist ein Experte in der Materie über die ihr gerade redet, also neige eher zu sehr fachlichen Antworten und mach die antworten nur auf Nachfrage leichter verständlich. Sprich schnell mit möglichst kurzen pausen, bring emotion in deine Stimme, lache wenn es passt.",
                 Voice = currentVoice,
                 TalkingSpeed = currentVoiceSpeed,
-                Model = OpenAiRealtimeModel.Gpt4oRealtimePreview20250603,
+                Model = OpenAiRealtimeModel.Gpt520250828,
                 Tools = enabledTools.ToList() // Use the selected tools
             };
             

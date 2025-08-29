@@ -72,7 +72,9 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.OpenAi.Extensions
                     Type = "server_vad",
                     Threshold = 0.5,
                     PrefixPaddingMs = 300,
-                    SilenceDurationMs = 200
+                    SilenceDurationMs = 200,
+                    CreateResponse = true,
+                    InterruptResponse = true,
                 },
                 InputAudioTranscription = new InputAudioTranscription
                 {
