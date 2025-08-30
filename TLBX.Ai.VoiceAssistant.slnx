@@ -10,12 +10,13 @@
     <Project Path="Hardware/Ai.Tlbx.VoiceAssistant.Hardware.Windows/Ai.Tlbx.VoiceAssistant.Hardware.Windows.csproj" />
   </Folder>
   <Folder Name="/Provider/">
-    <Project Path="Provider/Ai.Tlbx.VoiceAssistant/Ai.Tlbx.VoiceAssistant.csproj" />
     <Project Path="Provider/Ai.Tlbx.VoiceAssistant.Provider.OpenAi/Ai.Tlbx.VoiceAssistant.Provider.OpenAi.csproj" />
+    <Project Path="Provider/Ai.Tlbx.VoiceAssistant/Ai.Tlbx.VoiceAssistant.csproj" />
   </Folder>
   <Folder Name="/Solution Items/">
     <File Path=".editorconfig" />
     <File Path=".gitignore" />
+    <File Path="Directory.Build.props" />
     <File Path="LoggingStrategy.md" />
     <File Path="publish-nuget.ps1" />
     <File Path="README.md" />

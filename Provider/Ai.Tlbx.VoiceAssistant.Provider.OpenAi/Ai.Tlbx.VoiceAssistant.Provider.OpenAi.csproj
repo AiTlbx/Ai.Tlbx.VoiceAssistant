@@ -9,20 +9,11 @@
     
     <!-- NuGet Package Metadata -->
     <PackageId>Ai.Tlbx.VoiceAssistant.Provider.OpenAi</PackageId>
-    <Version>4.0.2</Version>
-    <Authors>Johannes Schmidt</Authors>
-    <Company>TLBX</Company>
     <Description>OpenAI provider implementation for the Voice Assistant toolkit. Enables real-time conversation with OpenAI's GPT models through WebSocket connections.</Description>
     <PackageTags>AI;OpenAI;VoiceAssistant;RealTime;Audio;GPT</PackageTags>
-    <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <RepositoryUrl>https://github.com/AiTlbx/Ai.Tlbx.VoiceAssistant</RepositoryUrl>
-    <RepositoryType>git</RepositoryType>
     <GeneratePackageOnBuild Condition="'$(Configuration)' == 'Release'">true</GeneratePackageOnBuild>
     <PackageOutputPath>..\..\nupkg</PackageOutputPath>
-    <PackageProjectUrl>https://github.com/AiTlbx/Ai.Tlbx.VoiceAssistant</PackageProjectUrl>
-    <Copyright>Copyright (c) 2025 Johannes Schmidt, TLBX</Copyright>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
-    <Product>Voice Assistant Toolkit</Product>
   </PropertyGroup>
 
   <ItemGroup>

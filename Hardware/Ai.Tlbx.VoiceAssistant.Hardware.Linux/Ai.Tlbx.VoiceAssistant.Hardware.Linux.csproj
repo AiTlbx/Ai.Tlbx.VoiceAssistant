@@ -7,19 +7,11 @@
     
     <!-- NuGet Package Metadata -->
     <PackageId>Ai.Tlbx.VoiceAssistant.Hardware.Linux</PackageId>
-    <Version>4.0.2</Version>
-    <Authors>Johannes Schmidt</Authors>
-    <Company>TLBX</Company>
     <Description>Linux-specific hardware integration for voice assistant audio processing</Description>
     <PackageTags>audio;linux;voiceassistant;hardware;alsa</PackageTags>
-    <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <RepositoryUrl>https://github.com/AiTlbx/Ai.Tlbx.VoiceAssistant</RepositoryUrl>
-    <RepositoryType>git</RepositoryType>
     <GeneratePackageOnBuild Condition="'$(Configuration)' == 'Release'">true</GeneratePackageOnBuild>
     <PackageOutputPath>..\..\nupkg</PackageOutputPath>
-    <PackageProjectUrl>https://github.com/AiTlbx/Ai.Tlbx.VoiceAssistant</PackageProjectUrl>
-    <Copyright>Copyright (c) 2025 Johannes Schmidt, TLBX</Copyright>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
     <NoWarn>NU5104</NoWarn>
   </PropertyGroup>

@@ -1,6 +1,6 @@
 # Script to build and publish NuGet packages with current version numbers
 # This script will:
-# 1. Build the packages with the current version from project files
+# 1. Build the packages with the current version from Directory.Build.props
 # 2. If NUGET_API_KEY environment variable exists, upload packages to NuGet.org
 
 param(
@@ -9,6 +9,18 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+
+# Read current version from Directory.Build.props
+$propsFilePath = Join-Path $PSScriptRoot "Directory.Build.props"
+if (Test-Path $propsFilePath) 
+{
+    $propsContent = Get-Content $propsFilePath -Raw
+    if ($propsContent -match '<Version>(\d+\.\d+\.\d+)</Version>') 
+    {
+        $currentVersion = $Matches[1]
+        Write-Host "Building packages with version: $currentVersion" -ForegroundColor Cyan
+    }
+}
 
 # Create output directory if it doesn't exist
 $nupkgDir = Join-Path $PSScriptRoot "nupkg"
@@ -37,10 +49,12 @@ else
 
 # Projects to build
 $projects = @(
-    "Provider\Ai.Tlbx.RealTimeAudio.OpenAi\Ai.Tlbx.RealTimeAudio.OpenAi.csproj",
-    "Hardware\Ai.Tlbx.RealTimeAudio.Hardware.Windows\Ai.Tlbx.RealTimeAudio.Hardware.Windows.csproj",
-    "Hardware\Ai.Tlbx.RealTimeAudio.Hardware.Web\Ai.Tlbx.RealTimeAudio.Hardware.Web.csproj",
-    "Hardware\Ai.Tlbx.RealTimeAudio.Hardware.Linux\Ai.Tlbx.RealTimeAudio.Hardware.Linux.csproj"
+    "Provider\Ai.Tlbx.VoiceAssistant\Ai.Tlbx.VoiceAssistant.csproj",
+    "Provider\Ai.Tlbx.VoiceAssistant.Provider.OpenAi\Ai.Tlbx.VoiceAssistant.Provider.OpenAi.csproj",
+    "Hardware\Ai.Tlbx.VoiceAssistant.Hardware.Windows\Ai.Tlbx.VoiceAssistant.Hardware.Windows.csproj",
+    "Hardware\Ai.Tlbx.VoiceAssistant.Hardware.Web\Ai.Tlbx.VoiceAssistant.Hardware.Web.csproj",
+    "Hardware\Ai.Tlbx.VoiceAssistant.Hardware.Linux\Ai.Tlbx.VoiceAssistant.Hardware.Linux.csproj",
+    "WebUi\Ai.Tlbx.VoiceAssistant.WebUi\Ai.Tlbx.VoiceAssistant.WebUi.csproj"
 )
 
 $allPackagesSuccessful = $true

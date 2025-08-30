@@ -70,35 +70,43 @@ if (-not $gitHash)
 }
 Write-Host "Current git hash: $gitHash"
 
-# Version file path
-$versionFilePath = Join-Path $PSScriptRoot "version.txt"
+# Directory.Build.props file path
+$propsFilePath = Join-Path $PSScriptRoot "Directory.Build.props"
 
-# Initialize or read current version
-if (Test-Path $versionFilePath) 
+# Read current version from Directory.Build.props
+if (Test-Path $propsFilePath) 
 {
-    $versionContent = Get-Content $versionFilePath
-    $versionParts = $versionContent -split '\.'
-    $major = [int]$versionParts[0]
-    $minor = [int]$versionParts[1]
-    $patch = [int]$versionParts[2]
-    
-    # Increment patch version
-    $patch++
-    
-    $newVersion = "$major.$minor.$patch"
+    $propsContent = Get-Content $propsFilePath -Raw
+    if ($propsContent -match '<Version>(\d+)\.(\d+)\.(\d+)</Version>') 
+    {
+        $major = [int]$Matches[1]
+        $minor = [int]$Matches[2]
+        $patch = [int]$Matches[3]
+        
+        # Increment patch version
+        $patch++
+        
+        $newVersion = "$major.$minor.$patch"
+    }
+    else 
+    {
+        Write-Error "Could not find Version in Directory.Build.props"
+        exit 1
+    }
 } 
 else 
 {
-    # Default starting version
-    $newVersion = "1.0.1"
+    Write-Error "Directory.Build.props not found"
+    exit 1
 }
 
 # Format version - using semantic version only (no git hash)
 $fullVersion = "$newVersion"
 
-# Save the new version
-$newVersion | Out-File -FilePath $versionFilePath -NoNewline
-Write-Host "New version: $fullVersion"
+# Update the version in Directory.Build.props
+$propsContent = $propsContent -replace '<Version>\d+\.\d+\.\d+</Version>', "<Version>$newVersion</Version>"
+$propsContent | Out-File -FilePath $propsFilePath -NoNewline
+Write-Host "Updated version to: $fullVersion"
 
 # Check for NuGet API key in environment
 $apiKey = $env:NUGET_API_KEY

@@ -8,14 +8,11 @@
     
     <!-- NuGet Package Metadata -->
     <PackageId>Ai.Tlbx.VoiceAssistant.WebUi</PackageId>
-    <Version>4.0.2</Version>
-    <Authors>Johannes Schmidt</Authors>
-    <Company>TLBX</Company>
     <Description>Blazor UI components for Voice Assistant toolkit</Description>
     <PackageTags>voiceassistant;ui;blazor;components</PackageTags>
-    <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <GeneratePackageOnBuild Condition="'$(Configuration)' == 'Release'">true</GeneratePackageOnBuild>
-    <PackageOutputPath>..\..\nupkg</PackageOutputPath>    
+    <PackageOutputPath>..\..\nupkg</PackageOutputPath>
+    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>    
   </PropertyGroup>
 
   
