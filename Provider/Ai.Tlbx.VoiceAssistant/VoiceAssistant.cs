@@ -479,7 +479,7 @@ namespace Ai.Tlbx.VoiceAssistant
                 try
                 {
                     await _hardwareAccess.ClearAudioQueue();
-                    _logAction(LogLevel.Info, "Audio queue cleared due to speech detection");
+                    // Audio queue cleared for interruption - normal operation
                 }
                 catch (Exception ex)
                 {

@@ -14,6 +14,7 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Web
         private readonly object _audioLock = new object();
         private bool _isPlaying = false;
         private bool _isRecording = false;
+        private bool _playbackSessionLogged = false;
         
         // Add these fields for recording        
         private MicrophoneAudioReceivedEventHandler? _audioDataReceivedHandler;
@@ -170,15 +171,20 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Web
                     ? dataElement.GetString() 
                     : null;
                 
-                // Log to Debug output with consistent formatting
-                var logMessage = $"[{timestamp}] [JS-DIAG] {message}";
-                if (!string.IsNullOrEmpty(dataJson))
+                // Only log important JS diagnostic messages (errors, warnings, or significant events)
+                if (message.Contains("error", StringComparison.OrdinalIgnoreCase) || 
+                    message.Contains("failed", StringComparison.OrdinalIgnoreCase) ||
+                    message.Contains("Audio system fully initialized", StringComparison.OrdinalIgnoreCase))
                 {
-                    Log(LogLevel.Info, $"{logMessage} | Data: {dataJson}");
-                }
-                else
-                {
-                    Log(LogLevel.Info, logMessage);
+                    var logMessage = $"[JS-DIAG] {message}";
+                    if (!string.IsNullOrEmpty(dataJson))
+                    {
+                        Log(LogLevel.Info, $"{logMessage} | Data: {dataJson}");
+                    }
+                    else
+                    {
+                        Log(LogLevel.Info, logMessage);
+                    }
                 }
             }
             catch (Exception ex)
@@ -264,14 +270,16 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Web
                 if (!_isPlaying)
                 {
                     _isPlaying = true;
+                    if (!_playbackSessionLogged)
+                    {
+                        Log(LogLevel.Info, "Audio playback session started");
+                        _playbackSessionLogged = true;
+                    }
                     // Start audio processing in background without awaiting
                     _ = Task.Run(async () => 
                     {
                         try
                         {
-                            // Reduced logging - only log start of session
-                            if (_audioQueue.Count == 1)
-                                Log(LogLevel.Info, "Audio playback started");
                             await ProcessAudioQueue();
                         }
                         catch (Exception ex)
@@ -283,7 +291,7 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Web
                             lock (_audioLock)
                             {
                                 _isPlaying = false;
-                                // Reduced logging - don't spam finished messages
+                                // Don't reset _playbackSessionLogged here - it should persist for the entire response
                             }
                         }
                     });
@@ -376,9 +384,9 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Web
                     if (_audioQueue.Count > 0)
                     {
                         nextChunk = _audioQueue.Dequeue();
-                        // Reduced logging - only log if significant queue change
-                    if (_audioQueue.Count > 10 || _audioQueue.Count == 0)
-                        Log(LogLevel.Info, $"Audio chunk dequeued. Remaining queue size: {_audioQueue.Count} items");
+                        // Reduced logging - only log if queue is building up (potential issue)
+                    if (_audioQueue.Count > 10)
+                        Log(LogLevel.Warn, $"Audio queue building up: {_audioQueue.Count} items remaining");
                     }
                 }
 
@@ -424,6 +432,12 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Web
                 {
                     Log(LogLevel.Warn, "Already recording, ignoring start request");
                     return true;
+                }
+                
+                // Reset playback session logging for new recording session
+                lock (_audioLock)
+                {
+                    _playbackSessionLogged = false;
                 }
                 
                 if (_audioModule == null)
@@ -558,8 +572,8 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Web
             }
             catch (JSException jsEx)
             {
-                // Handle JavaScript errors gracefully (e.g., if audio context is already closed)
-                Log(LogLevel.Warn, $"JavaScript error during stop recording: {jsEx.Message}");
+                // Handle JavaScript errors gracefully (e.g., if audio context is already closed or JSON conversion issues)
+                // This is expected when stopping recording in some browser states
                 CleanupRecording();
                 return true; // Consider it stopped
             }
@@ -591,8 +605,9 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Web
                 {
                     queuedItems = _audioQueue.Count;
                     _audioQueue.Clear();
+                    _playbackSessionLogged = false; // Reset session logging
                     if (queuedItems > 0)
-                    Log(LogLevel.Info, $"Cleared audio queue with {queuedItems} pending items");
+                        Log(LogLevel.Info, $"Cleared audio queue with {queuedItems} pending items");
                 }
 
                 // Stop any current audio playback

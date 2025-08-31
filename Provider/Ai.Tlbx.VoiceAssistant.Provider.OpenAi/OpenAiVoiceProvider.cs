@@ -101,7 +101,7 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.OpenAi
             if (_settings == null)
                 throw new InvalidOperationException("Settings must be configured before creating session");
 
-            _logAction(LogLevel.Info, "Creating OpenAI realtime client secret to obtain ephemeral key");
+            // Creating client secret for ephemeral key
             
             using var httpClient = new HttpClient();
             httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _apiKey);
@@ -122,7 +122,7 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.OpenAi
                 }
             };
             
-            _logAction(LogLevel.Info, $"Creating client secret for model: {_settings.Model.ToApiString()}");
+            // Using model: {_settings.Model.ToApiString()}
             
             var json = JsonSerializer.Serialize(request);
             var content = new StringContent(json, Encoding.UTF8, "application/json");
@@ -137,7 +137,7 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.OpenAi
             }
             
             var responseJson = await response.Content.ReadAsStringAsync();
-            _logAction(LogLevel.Info, "Client secret created successfully, parsing response");
+            // Parsing client secret response
             
             using var document = JsonDocument.Parse(responseJson);
             
@@ -155,11 +155,7 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.OpenAi
                 if (document.RootElement.TryGetProperty("expires_at", out var expiresAt))
                 {
                     var expiry = DateTimeOffset.FromUnixTimeSeconds(expiresAt.GetInt64());
-                    _logAction(LogLevel.Info, $"Ephemeral key obtained, expires at: {expiry:yyyy-MM-dd HH:mm:ss}");
-                }
-                else
-                {
-                    _logAction(LogLevel.Info, "Ephemeral key obtained");
+                    // Key expires at: {expiry:yyyy-MM-dd HH:mm:ss}
                 }
                 
                 return ephemeralKey;
@@ -190,13 +186,13 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.OpenAi
             try
             {
                 OnStatusChanged?.Invoke("Creating session...");
-                _logAction(LogLevel.Info, "Creating OpenAI client secret for ephemeral key");
+                // Getting ephemeral key for session
                 
                 // Get ephemeral key first
                 var ephemeralKey = await CreateSessionAsync();
                 
                 OnStatusChanged?.Invoke("Connecting to OpenAI...");
-                _logAction(LogLevel.Info, "Starting WebSocket connection with ephemeral key");
+                // Establishing WebSocket connection
 
                 _webSocket = new ClientWebSocket();
                 _webSocket.Options.SetRequestHeader("Authorization", $"Bearer {ephemeralKey}");
@@ -207,7 +203,6 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.OpenAi
                 var uri = new Uri($"{REALTIME_WEBSOCKET_ENDPOINT}?model={_settings.Model.ToApiString()}");
                 await _webSocket.ConnectAsync(uri, _cts.Token);
 
-                _logAction(LogLevel.Info, "WebSocket connection established");
                 OnStatusChanged?.Invoke("Connected to OpenAI");
 
                 // Start the message receiving task
@@ -368,7 +363,7 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.OpenAi
                             {
                                 new
                                 {
-                                    type = "input_text",
+                                    type = message.Role == ChatMessage.UserRole ? "input_text" : "output_text",
                                     text = message.Content
                                 }
                             }
@@ -376,7 +371,7 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.OpenAi
                     };
                     
                     await SendMessageAsync(JsonSerializer.Serialize(conversationItem));
-                    _logAction(LogLevel.Info, $"Injected {message.Role} message into conversation");
+                    // Reduced logging - only log summary at end
                     
                     // Small delay to avoid overwhelming the API
                     await Task.Delay(50);
@@ -532,7 +527,7 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.OpenAi
                         _logAction(LogLevel.Info, "Session created by OpenAI");
                         break;
                     case "session.updated":
-                        _logAction(LogLevel.Info, "Session configuration updated");
+                        // Session updated - normal operation, no need to log
                         break;
                     case "response.created":
                         HandleResponseCreated(root);
@@ -824,7 +819,7 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.OpenAi
             }
             else
             {
-                _logAction(LogLevel.Info, "No active response to interrupt");
+                // No response to interrupt - this is normal
             }
         }
 

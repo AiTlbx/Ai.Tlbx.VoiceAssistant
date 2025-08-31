@@ -145,8 +145,8 @@ var settings = new OpenAiVoiceSettings
     // Speed: 0.25 to 4.0 (1.0 = normal)
     TalkingSpeed = 1.0,
     
-    // Model options (latest recommended)
-    Model = OpenAiRealtimeModel.Gpt4oRealtimePreview20250603,
+    // Model options (latest with emotional responses - recommended)
+    Model = OpenAiRealtimeModel.Gpt520250828,
     
     // Optional
     Temperature = 0.7,
