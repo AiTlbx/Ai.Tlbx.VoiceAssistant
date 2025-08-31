@@ -7,6 +7,8 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Net.Http;
+using System.Net.Http.Headers;
 using Ai.Tlbx.VoiceAssistant.Interfaces;
 using Ai.Tlbx.VoiceAssistant.Models;
 using Ai.Tlbx.VoiceAssistant.Provider.OpenAi.Models;
@@ -19,6 +21,7 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.OpenAi
     public sealed class OpenAiVoiceProvider : IVoiceProvider
     {
         private const string REALTIME_WEBSOCKET_ENDPOINT = "wss://api.openai.com/v1/realtime";
+        private const string REALTIME_SESSION_ENDPOINT = "https://api.openai.com/v1/realtime/client_secrets";
         private const int CONNECTION_TIMEOUT_MS = 10000;
         private const int AUDIO_BUFFER_SIZE = 32384;
 
@@ -90,6 +93,85 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.OpenAi
         }
 
         /// <summary>
+        /// Creates a session and obtains an ephemeral key for WebSocket connection.
+        /// </summary>
+        /// <returns>The ephemeral key for authentication.</returns>
+        private async Task<string> CreateSessionAsync()
+        {
+            if (_settings == null)
+                throw new InvalidOperationException("Settings must be configured before creating session");
+
+            _logAction(LogLevel.Info, "Creating OpenAI realtime client secret to obtain ephemeral key");
+            
+            using var httpClient = new HttpClient();
+            httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _apiKey);
+            
+            // Create request with session configuration
+            var request = new
+            {
+                expires_after = new 
+                { 
+                    anchor = "created_at", 
+                    seconds = 600  // 10 minutes
+                },
+                session = new
+                {
+                    type = "realtime",
+                    model = _settings.Model.ToApiString(),
+                    instructions = _settings.Instructions
+                }
+            };
+            
+            _logAction(LogLevel.Info, $"Creating client secret for model: {_settings.Model.ToApiString()}");
+            
+            var json = JsonSerializer.Serialize(request);
+            var content = new StringContent(json, Encoding.UTF8, "application/json");
+            
+            var response = await httpClient.PostAsync(REALTIME_SESSION_ENDPOINT, content);
+            
+            if (!response.IsSuccessStatusCode)
+            {
+                var error = await response.Content.ReadAsStringAsync();
+                _logAction(LogLevel.Error, $"Failed to create client secret: {response.StatusCode} - {error}");
+                throw new InvalidOperationException($"Failed to create OpenAI client secret: {response.StatusCode}");
+            }
+            
+            var responseJson = await response.Content.ReadAsStringAsync();
+            _logAction(LogLevel.Info, "Client secret created successfully, parsing response");
+            
+            using var document = JsonDocument.Parse(responseJson);
+            
+            // The ephemeral key is at root level as "value"
+            if (document.RootElement.TryGetProperty("value", out var rootValue))
+            {
+                var ephemeralKey = rootValue.GetString();
+                
+                if (string.IsNullOrEmpty(ephemeralKey))
+                {
+                    throw new InvalidOperationException("Received empty ephemeral key from OpenAI");
+                }
+                
+                // Log expiry if available
+                if (document.RootElement.TryGetProperty("expires_at", out var expiresAt))
+                {
+                    var expiry = DateTimeOffset.FromUnixTimeSeconds(expiresAt.GetInt64());
+                    _logAction(LogLevel.Info, $"Ephemeral key obtained, expires at: {expiry:yyyy-MM-dd HH:mm:ss}");
+                }
+                else
+                {
+                    _logAction(LogLevel.Info, "Ephemeral key obtained");
+                }
+                
+                return ephemeralKey;
+            }
+            
+            // Log the actual structure for debugging if parsing fails
+            _logAction(LogLevel.Error, $"Unexpected response structure. Root properties: {string.Join(", ", document.RootElement.EnumerateObject().Select(p => p.Name))}");
+            
+            throw new InvalidOperationException("Failed to extract ephemeral key from client secret response");
+        }
+
+        /// <summary>
         /// Connects to the OpenAI real-time API using the specified settings.
         /// </summary>
         /// <param name="settings">OpenAI-specific voice settings.</param>
@@ -100,27 +182,25 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.OpenAi
             {
                 throw new ArgumentException("Settings must be of type OpenAiVoiceSettings for OpenAI provider", nameof(settings));
             }
-
-            // If we have pre-configured settings with tools, merge them
-            if (_settings != null && _settings.Tools.Any())
-            {
-                foreach (var tool in _settings.Tools.Where(t => !openAiSettings.Tools.Any(st => st.Name == t.Name)))
-                {
-                    openAiSettings.Tools.Add(tool);
-                }
-            }
+                       
 
             _settings = openAiSettings;
             _logAction(LogLevel.Info, $"Settings configured - Voice: {_settings.Voice}, Speed: {_settings.TalkingSpeed}, Model: {_settings.Model}");
 
             try
             {
+                OnStatusChanged?.Invoke("Creating session...");
+                _logAction(LogLevel.Info, "Creating OpenAI client secret for ephemeral key");
+                
+                // Get ephemeral key first
+                var ephemeralKey = await CreateSessionAsync();
+                
                 OnStatusChanged?.Invoke("Connecting to OpenAI...");
-                _logAction(LogLevel.Info, "Starting connection to OpenAI real-time API");
+                _logAction(LogLevel.Info, "Starting WebSocket connection with ephemeral key");
 
                 _webSocket = new ClientWebSocket();
-                _webSocket.Options.SetRequestHeader("Authorization", $"Bearer {_apiKey}");
-                _webSocket.Options.SetRequestHeader("OpenAI-Beta", "realtime=v1");
+                _webSocket.Options.SetRequestHeader("Authorization", $"Bearer {ephemeralKey}");
+                // Beta header removed for production API
 
                 _cts = new CancellationTokenSource(CONNECTION_TIMEOUT_MS);
 
@@ -321,43 +401,61 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.OpenAi
             
             var session = new Dictionary<string, object>
             {
-                ["model"] = _settings.Model.ToApiString(),
-                ["voice"] = voiceString,
+                ["type"] = "realtime",
+                // Explicitly set all configuration values to avoid surprises from API changes
+                ["output_modalities"] = new[] { "audio" },           
                 ["instructions"] = _settings.Instructions,
-                ["temperature"] = _settings.Temperature,
-                ["speed"] = _settings.TalkingSpeed,
-                ["turn_detection"] = new
-                {
-                    type = _settings.TurnDetection.Type,
-                    threshold = _settings.TurnDetection.Threshold,
-                    prefix_padding_ms = _settings.TurnDetection.PrefixPaddingMs,
-                    silence_duration_ms = _settings.TurnDetection.SilenceDurationMs
-                },
-                ["input_audio_transcription"] = new
-                {
-                    model = _settings.InputAudioTranscription.Model
-                },
-                ["output_audio_format"] = _settings.OutputAudioFormat,
+                //["temperature"] = _settings.Temperature,
+                ["max_output_tokens"] = _settings.MaxTokens?.ToString() ?? "inf",
+                ["tool_choice"] = "auto",
                 ["tools"] = _settings.Tools.Select(tool => new
                 {
                     type = "function",
                     name = tool.Name,
                     description = tool.Description,
                     parameters = GetToolParameters(tool)
-                }).ToArray()
+                }).ToArray(),
+                ["audio"] = new
+                {
+                    input = new
+                    {
+                        //format = "pcm16",
+                        noise_reduction = new 
+                        {
+                            type = "far_field",    
+                        },
+                        transcription = _settings.InputAudioTranscription.Enabled ? new
+                        {
+                            model = _settings.InputAudioTranscription.Model
+                        } : null,
+                        turn_detection = new
+                        {
+                            type = _settings.TurnDetection.Type,
+                            threshold = _settings.TurnDetection.Threshold,
+                            prefix_padding_ms = _settings.TurnDetection.PrefixPaddingMs,
+                            silence_duration_ms = _settings.TurnDetection.SilenceDurationMs,
+                            create_response = _settings.TurnDetection.CreateResponse,
+                            interrupt_response = _settings.TurnDetection.InterruptResponse
+                        }
+                    },
+                    output = new
+                    {
+                        //format = _settings.OutputAudioFormat,
+                        speed = _settings.TalkingSpeed,
+                        voice = voiceString
+                    }
+                }
             };
-
-            // Only add max_response_output_tokens if it has a value
-            session["max_response_output_tokens"] = _settings.MaxTokens.HasValue ? _settings.MaxTokens.Value : "inf";
 
             var sessionConfig = new
             {
+                event_id = $"evt_{Guid.NewGuid()}",
                 type = "session.update",
                 session = session
             };
 
             var jsonMessage = JsonSerializer.Serialize(sessionConfig, new JsonSerializerOptions { WriteIndented = true });
-            _logAction(LogLevel.Info, $"Sending session config to OpenAI:\n{jsonMessage}");
+            _logAction(LogLevel.Info, $"Sending explicit session config to OpenAI:\n{jsonMessage}");
             await SendMessageAsync(jsonMessage);
             _logAction(LogLevel.Info, "Session configuration sent to OpenAI");
         }
@@ -442,10 +540,11 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.OpenAi
                     case "conversation.item.created":
                         // Expected message that we don't need to process
                         break;
-                    case "response.audio.delta":
+                    // New API uses response.output_audio instead of response.audio
+                    case "response.output_audio.delta":
                         await HandleAudioResponse(root);
                         break;
-                    case "response.audio_transcript.done":
+                    case "response.output_audio_transcript.done":
                         HandleAudioTranscriptDone(root);
                         break;
                     case "response.done":
@@ -481,11 +580,13 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.OpenAi
                     case "response.output_item.added":
                     case "response.content_part.added":
                     case "response.content_part.done":
-                    case "response.audio.done":
-                    case "response.audio_transcript.delta":
+                    case "response.output_audio.done":
+                    case "response.output_audio_transcript.delta":
                     case "response.output_item.done":
                     case "rate_limits.updated":
                     case "conversation.item.input_audio_transcription.delta":
+                    case "conversation.item.added":
+                    case "conversation.item.done":
                         // These are expected messages that we don't need special handling for
                         break;
                     default:
@@ -508,7 +609,7 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.OpenAi
                 var audioData = delta.GetString();
                 if (!string.IsNullOrEmpty(audioData))
                 {
-                    _logAction(LogLevel.Info, $"Received audio response: {audioData.Length} characters");
+                    // Don't log every audio chunk - too verbose
                     OnAudioReceived?.Invoke(audioData);
                 }
             }

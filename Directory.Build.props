@@ -1,15 +1,14 @@
 <Project>
   <!-- Centralized version management for all projects -->
   <PropertyGroup>
-    <Version>4.1.0</Version>
+    <Version>5.0.0</Version>
     <AssemblyVersion>$(Version)</AssemblyVersion>
     <FileVersion>$(Version)</FileVersion>
     
     <!-- Common package metadata -->
-    <Authors>Johannes Schmidt</Authors>
-    <Company>TLBX</Company>
+    <Authors>TLBX</Authors>    
     <Product>AI Voice Assistant Toolkit</Product>
-    <Copyright>Copyright © 2025 Johannes Schmidt, TLBX</Copyright>
+    <Copyright>Copyright © 2025 TLBX</Copyright>
     
     <!-- Package settings -->
     <PackageProjectUrl>https://github.com/johanssonjohan/Ai.Tlbx.VoiceAssistant</PackageProjectUrl>

@@ -256,7 +256,9 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Web
             {
                 // Store both the audio data and sample rate
                 _audioQueue.Enqueue($"{base64EncodedPcm16Audio}|{sampleRate}");                    
-                Log(LogLevel.Info, $"Audio chunk queued. Queue size: {_audioQueue.Count} items");
+                // Reduced logging - only log if queue is getting long (potential issue)
+                if (_audioQueue.Count > 5)
+                    Log(LogLevel.Warn, $"Audio queue building up: {_audioQueue.Count} items");
                 
                 // If nothing is currently playing, start the audio processing
                 if (!_isPlaying)
@@ -267,7 +269,9 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Web
                     {
                         try
                         {
-                            Log(LogLevel.Info, "Starting audio playback pipeline in background...");
+                            // Reduced logging - only log start of session
+                            if (_audioQueue.Count == 1)
+                                Log(LogLevel.Info, "Audio playback started");
                             await ProcessAudioQueue();
                         }
                         catch (Exception ex)
@@ -279,7 +283,7 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Web
                             lock (_audioLock)
                             {
                                 _isPlaying = false;
-                                Log(LogLevel.Info, "Playback finished, isPlaying set to false");
+                                // Reduced logging - don't spam finished messages
                             }
                         }
                     });
@@ -296,9 +300,8 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Web
 
             try
             {
-                Log(LogLevel.Info, $"Sending audio chunk to browser for playback. Size: {base64EncodedPcm16Audio.Length} chars");                 
+                // Reduced logging - don't spam for every chunk
                 await _audioModule.InvokeVoidAsync("playAudio", base64EncodedPcm16Audio, sampleRate);
-                Log(LogLevel.Info, "Audio playback started in browser");
             }
             catch (JSDisconnectedException jsEx)
             {
@@ -373,6 +376,8 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Web
                     if (_audioQueue.Count > 0)
                     {
                         nextChunk = _audioQueue.Dequeue();
+                        // Reduced logging - only log if significant queue change
+                    if (_audioQueue.Count > 10 || _audioQueue.Count == 0)
                         Log(LogLevel.Info, $"Audio chunk dequeued. Remaining queue size: {_audioQueue.Count} items");
                     }
                 }
@@ -386,7 +391,7 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Web
                         if (_audioQueue.Count == 0)
                         {
                             _isPlaying = false;
-                            Log(LogLevel.Info, "Playback finished, isPlaying set to false");
+                            // Reduced logging - don't spam playback finish messages
                             return;
                         }
                     }
@@ -496,7 +501,8 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Web
         public Task ReceiveAudioData(string base64EncodedPcm16Audio)
         {
             // Log that the method was called using console logging
-            Log(LogLevel.Info, $"ReceiveAudioData called, data length: {base64EncodedPcm16Audio?.Length ?? 0}");
+            // Reduced logging - this is called frequently
+            // Log(LogLevel.Info, $"ReceiveAudioData called, data length: {base64EncodedPcm16Audio?.Length ?? 0}");
 
             try
             {
@@ -516,7 +522,8 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Web
 
                 // Invoke the callback with the received audio data
                 _audioDataReceivedHandler.Invoke(this, new MicrophoneAudioReceivedEventArgs(base64EncodedPcm16Audio));
-                Log(LogLevel.Info, "Successfully invoked _audioDataReceivedHandler");
+                // Reduced logging - success is normal
+                // Log(LogLevel.Info, "Successfully invoked _audioDataReceivedHandler");
             }
             catch (Exception ex)
             {
@@ -584,13 +591,13 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Web
                 {
                     queuedItems = _audioQueue.Count;
                     _audioQueue.Clear();
+                    if (queuedItems > 0)
                     Log(LogLevel.Info, $"Cleared audio queue with {queuedItems} pending items");
                 }
 
                 // Stop any current audio playback
-                Log(LogLevel.Info, "Stopping current audio playback");
+                // Stop any current audio playback
                 await _audioModule.InvokeVoidAsync("stopAudioPlayback");
-                Log(LogLevel.Info, "Audio playback stopped");
 
                 // Reset playing state
                 lock (_audioLock)

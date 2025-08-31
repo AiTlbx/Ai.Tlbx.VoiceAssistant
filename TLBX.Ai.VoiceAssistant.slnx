@@ -20,7 +20,6 @@
     <File Path="LoggingStrategy.md" />
     <File Path="publish-nuget.ps1" />
     <File Path="README.md" />
-    <File Path="version.txt" />
     <File Path="VoiceAssistant-v4-Refactoring-Plan.md" />
   </Folder>
   <Folder Name="/WebUi/">

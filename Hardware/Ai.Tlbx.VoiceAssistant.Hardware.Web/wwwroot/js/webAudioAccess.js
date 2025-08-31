@@ -12,6 +12,7 @@ let playbackSampleRate = 24000;
 let playbackNodeConnected = false;
 let sessionCount = 0;
 let lastSessionDiagnostics = null;
+let isPlayingAudio = false; // Track if assistant is currently speaking
 // Note: We properly stop streams when done - don't hog the microphone!
 
 // Diagnostic logging levels
@@ -565,16 +566,19 @@ async function startRecording(dotNetObj, intervalMs = 500, deviceId = null) {
     dotNetReference = dotNetObj; // Store reference
 
     try {
-        logNormal(`Attempting to get media stream for device: ${deviceId || 'default'}`);
+        // Always enable echo cancellation - simplest and most reliable solution
+        // Modern browsers have excellent echo cancellation that works well with all devices
+        logNormal(`Using echo cancellation for device: ${deviceId || 'default'}`);
+        
         const constraints = {
             audio: {
                 channelCount: 1,
                 // Use higher sample rate to avoid telephony rates that trigger SCO
                 sampleRate: { ideal: 48000, min: 44100 },
-                // Disable processing that might trigger SCO mode
-                echoCancellation: false,
-                noiseSuppression: false,
-                autoGainControl: false,
+                // Always enable echo cancellation and audio processing
+                echoCancellation: true,
+                noiseSuppression: true,
+                autoGainControl: true,
                 ...(deviceId && { deviceId: { exact: deviceId } }) // Apply specific device ID if provided
             },
             video: false
@@ -841,11 +845,15 @@ function pcm16Base64ToFloat32(base64Audio) {
 // Main function to play audio using the worklet
 async function playAudio(base64Audio, sampleRate = 24000) {
      // console.log(`[js] Received playAudio request, sampleRate: ${sampleRate}, data: ${base64Audio.substring(0,30)}...`);
+     
+     // Mark that we're playing audio (for echo cancellation)
+     isPlayingAudio = true;
 
      // 1. Ensure AudioContext is running and playback node exists
      if (!(await ensureAudioContextResumed())) {
          console.error("Cannot play audio: AudioContext not running.");
           dotNetReference?.invokeMethodAsync('OnAudioError', 'Cannot play audio: AudioContext is not active. Please interact with the page.');
+         isPlayingAudio = false;
          return false; // Indicate failure
      }
       if (!playbackWorkletNode) {
@@ -886,6 +894,9 @@ async function playAudio(base64Audio, sampleRate = 24000) {
 // Function to stop audio playback and clear buffers
 async function stopAudioPlayback() {
     console.log("Attempting to stop audio playback.");
+    
+    // Mark that playback has stopped
+    isPlayingAudio = false;
 
     if (!audioContext || !playbackWorkletNode) {
         console.warn("Cannot stop playback: Audio context or playback node not initialized.");
