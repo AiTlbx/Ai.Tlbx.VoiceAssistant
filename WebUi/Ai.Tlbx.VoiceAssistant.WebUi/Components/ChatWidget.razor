@@ -3,70 +3,79 @@
 @using Ai.Tlbx.VoiceAssistant.Models
 @using System.Text.Json
 
-<div class="w-full">
+<div class="w-full px-2">
     @if (VoiceAssistant != null)
     {
         @foreach (var message in VoiceAssistant.ChatHistory)
         {
-            <div class="mb-3 @(GetMessageAlignment(message))">
-                <div>
+            <div class="mb-3">
+                <div class="@(GetMessageAlignment(message))">
                     <!-- Role label -->
-                    <div class="text-xs text-gray-500 mb-1 @(GetRoleLabelAlignment(message))">
+                    <div class="text-xs text-gray-500 mb-1">
                         @GetRoleLabel(message)
                     </div>
                     
                     <!-- Message bubble -->
                     <div class="@(GetMessageClasses(message))">
-                        @if (message.Role == ChatMessage.ToolRole)
+                        @if (message.Role == ChatMessage.ToolRole && ShowToolCalls)
                         {
-                            <div class="space-y-2">
+                            <div>
                                 <div class="flex items-center gap-2">
-                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-purple-600" viewBox="0 0 20 20" fill="currentColor">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-purple-600 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
                                         <path fill-rule="evenodd" d="M7 2a1 1 0 00-.707 1.707L7 4.414v3.758a1 1 0 01-.293.707l-4 4C.817 14.769 2.156 18 4.828 18h10.343c2.673 0 4.012-3.231 2.122-5.121l-4-4A1 1 0 0113 8.172V4.414l.707-.707A1 1 0 0013 2H7zm2 6.172V4h2v4.172a3 3 0 00.879 2.12l1.027 1.028a4 4 0 00-2.171.102l-.47.156a4 4 0 01-2.53 0l-.563-.187a1.993 1.993 0 00-.114-.035l1.063-1.063A3 3 0 009 8.172z" clip-rule="evenodd" />
                                     </svg>
-                                    <span class="text-xs font-semibold text-purple-700">@message.ToolName</span>
+                                    <span class="text-xs">
+                                        <span class="font-semibold text-purple-700">@message.ToolName</span>
+                                        <span class="text-purple-500 ml-1">(Response)</span>
+                                    </span>
                                 </div>
-                                <div class="text-sm">
+                                @if (ShowDebugToolCalls && !string.IsNullOrWhiteSpace(message.Content))
+                                {
                                     @if (IsJsonContent(message.Content))
                                     {
-                                        <pre class="mt-2 text-xs bg-purple-100 rounded p-2 overflow-x-auto whitespace-pre-wrap break-words">@FormatJson(message.Content)</pre>
+                                        <pre class="mt-2 text-xs bg-purple-50 rounded-lg p-3 overflow-x-auto whitespace-pre-wrap break-words font-mono">@FormatJson(message.Content)</pre>
                                     }
                                     else
                                     {
-                                        <span>@message.Content</span>
+                                        <pre class="mt-2 text-xs bg-purple-50 rounded-lg p-3 overflow-x-auto whitespace-pre-wrap break-words font-mono">@message.Content</pre>
                                     }
-                                </div>
+                                }
                             </div>
                         }
-                        else if (message.Role == ChatMessage.AssistantRole && IsToolCallMessage(message.Content))
+                        else if (message.Role == ChatMessage.AssistantRole && IsToolCallMessage(message.Content) && ShowToolCalls)
                         {
-                            <div class="space-y-2">
+                            <div>
                                 <div class="flex items-center gap-2">
-                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-amber-600" viewBox="0 0 20 20" fill="currentColor">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-amber-600 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
                                         <path fill-rule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clip-rule="evenodd" />
                                     </svg>
-                                    <span class="text-xs font-semibold text-amber-700">Tool Call</span>
-                                </div>
-                                <div class="text-sm">
                                     @{
-                                        var (toolDescription, toolArgs) = ParseToolCallMessage(message.Content);
+                                        var toolName = ExtractToolName(message.Content);
                                     }
-                                    <div>@toolDescription</div>
+                                    <span class="text-xs">
+                                        <span class="font-semibold text-amber-700">@toolName</span>
+                                        <span class="text-amber-500 ml-1">(Request)</span>
+                                    </span>
+                                </div>
+                                @if (ShowDebugToolCalls)
+                                {
+                                    var (toolDescription, toolArgs) = ParseToolCallMessage(message.Content);
                                     @if (!string.IsNullOrEmpty(toolArgs))
                                     {
-                                        <pre class="mt-2 text-xs bg-amber-100 rounded p-2 overflow-x-auto whitespace-pre-wrap break-words">@toolArgs</pre>
+                                        <pre class="mt-2 text-xs bg-amber-50 rounded-lg p-3 overflow-x-auto whitespace-pre-wrap break-words font-mono">@toolArgs</pre>
                                     }
-                                </div>
+                                }
                             </div>
                         }
-                        else
+                        else if (!(message.Role == ChatMessage.ToolRole && !ShowToolCalls) && 
+                                 !(message.Role == ChatMessage.AssistantRole && IsToolCallMessage(message.Content) && !ShowToolCalls))
                         {
-                            <div class="text-sm whitespace-pre-wrap">@message.Content</div>
+                            <div class="text-sm whitespace-pre-wrap break-words">@message.Content</div>
                         }
                     </div>
                     
                     <!-- Timestamp -->
-                    <div class="text-xs text-gray-400 mt-1 @(GetRoleLabelAlignment(message))">
+                    <div class="text-xs text-gray-400 mt-1">
                         @message.Timestamp.ToLocalTime().ToString("HH:mm:ss")
                     </div>
                 </div>
@@ -78,13 +87,28 @@
 @code {
     [CascadingParameter] protected VoiceAssistant? VoiceAssistant { get; set; }
     
+    private bool _showDebugToolCalls = false;
+    [Parameter] 
+    public bool ShowDebugToolCalls 
+    { 
+        get => _showDebugToolCalls;
+        set
+        {
+            if (_showDebugToolCalls != value)
+            {
+                _showDebugToolCalls = value;
+                InvokeAsync(StateHasChanged);
+            }
+        }
+    }
+    
+    [Parameter] public bool ShowToolCalls { get; set; } = true;
+    
     private string GetMessageAlignment(ChatMessage message)
     {
         return message.Role switch
         {
             ChatMessage.UserRole => "flex flex-col items-end",
-            ChatMessage.AssistantRole => "flex flex-col items-start",
-            ChatMessage.ToolRole => "flex flex-col items-center",
             _ => "flex flex-col items-start"
         };
     }
@@ -94,14 +118,18 @@
         return message.Role switch
         {
             ChatMessage.UserRole => "text-right",
-            ChatMessage.AssistantRole => "text-left",
-            ChatMessage.ToolRole => "text-center",
             _ => "text-left"
         };
     }
     
     private string GetRoleLabel(ChatMessage message)
     {
+        // Tool call messages from assistant
+        if (message.Role == ChatMessage.AssistantRole && IsToolCallMessage(message.Content))
+        {
+            return "Assistant - Tool Request";
+        }
+        
         return message.Role switch
         {
             ChatMessage.UserRole => "You",
@@ -113,20 +141,20 @@
     
     private string GetMessageClasses(ChatMessage message)
     {
-        var baseClasses = "inline-block px-3 py-2 rounded-lg border shadow-sm";
+        var baseClasses = "inline-block px-4 py-3 rounded-2xl shadow-sm whitespace-normal";
         
-        // Special styling for tool call messages - use min-width to ensure JSON content fits
+        // Special styling for tool call messages
         if (message.Role == ChatMessage.AssistantRole && IsToolCallMessage(message.Content))
         {
-            return $"{baseClasses} bg-amber-50 border-amber-200 text-amber-900 min-w-[300px] max-w-[85%]";
+            return $"{baseClasses} bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 text-amber-900 max-w-[90%]";
         }
         
         return message.Role switch
         {
-            ChatMessage.UserRole => $"{baseClasses} bg-blue-50 border-blue-200 text-blue-900 max-w-[70%]",
-            ChatMessage.AssistantRole => $"{baseClasses} bg-gray-50 border-gray-200 text-gray-900 max-w-[70%]",
-            ChatMessage.ToolRole => $"{baseClasses} bg-purple-50 border-purple-200 text-purple-900 min-w-[300px] max-w-[85%]",
-            _ => $"{baseClasses} bg-gray-50 border-gray-200 max-w-[70%]"
+            ChatMessage.UserRole => $"{baseClasses} bg-gradient-to-r from-blue-500 to-blue-600 text-white max-w-[90%]",
+            ChatMessage.AssistantRole => $"{baseClasses} bg-white border border-gray-200 text-gray-900 max-w-[90%]",
+            ChatMessage.ToolRole => $"{baseClasses} bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 text-purple-900 max-w-[90%]",
+            _ => $"{baseClasses} bg-gray-50 border border-gray-200 max-w-[90%]"
         };
     }
     
@@ -186,5 +214,20 @@
         }
         
         return (description, arguments);
+    }
+    
+    private string ExtractToolName(string content)
+    {
+        if (string.IsNullOrEmpty(content))
+            return "Unknown";
+            
+        // Extract tool name from "Calling tool: ToolName" pattern
+        var match = System.Text.RegularExpressions.Regex.Match(content, @"Calling tool:\s*(\w+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        if (match.Success && match.Groups.Count > 1)
+        {
+            return match.Groups[1].Value;
+        }
+        
+        return "Unknown";
     }
 }

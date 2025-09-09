@@ -100,12 +100,13 @@
                     <!-- Chat Panel -->
                     <div class="lg:w-2/3">
                         <div class="bg-white rounded-lg shadow-sm border border-gray-200 h-[500px] flex flex-col overflow-hidden">
-                            <div class="border-b border-gray-200 px-3 py-2">
+                            <div class="border-b border-gray-200 px-3 py-2 flex items-center justify-between">
                                 <h3 class="text-sm font-medium text-gray-700">Conversation</h3>
+                                <DebugModeToggle @bind-ShowDebugMode="showDebugMode" />
                             </div>
 
                             <div class="flex-1 p-3 overflow-y-auto bg-gray-50" id="chat-messages" @ref="chatContainer">
-                                <ChatWidget />
+                                <ChatWidget ShowDebugToolCalls="@showDebugMode" ShowToolCalls="true" />
                             </div>
 
                             <div class="px-3 py-2 border-t border-gray-200 bg-white">
@@ -135,6 +136,7 @@
 @code 
 {
     private ElementReference chatContainer;
+    private bool showDebugMode = false;
     private AssistantVoice currentVoice = AssistantVoice.Alloy;
     private string _currentVoiceString = "Alloy";
     private string currentVoiceString 

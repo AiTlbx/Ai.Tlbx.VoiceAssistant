@@ -330,49 +330,6 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Web
             }
         }
 
-        // Helper to validate base64 strings
-        private bool IsValidBase64(string base64)
-        {
-            try
-            {
-                // Try to decode a small sample to validate
-                if (string.IsNullOrEmpty(base64) || base64.Length < 4)
-                    return false;
-                    
-                Convert.FromBase64String(base64);
-                return true;
-            }
-            catch
-            {
-                return false;
-            }
-        }
-
-        // Try to fix base64 padding
-        private string FixBase64Padding(string base64)
-        {
-            try
-            {
-                // Base64 strings should have a length that is a multiple of 4
-                var remainder = base64.Length % 4;
-                if (remainder > 0)
-                {
-                    // Add padding to make length a multiple of 4
-                    base64 += new string('=', 4 - remainder);
-                    Log(LogLevel.Info, "Fixed base64 padding");
-                }
-                
-                // Test if it's valid now
-                Convert.FromBase64String(base64);
-                return base64;
-            }
-            catch (Exception ex)
-            {
-                Log(LogLevel.Error, $"Error fixing base64: {ex.Message}");
-                return base64; // Return original if fix fails
-            }
-        }
-
         private async Task ProcessAudioQueue()
         {
             while (true)
