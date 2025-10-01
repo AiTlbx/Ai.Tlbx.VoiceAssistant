@@ -155,11 +155,11 @@
     }
     private double currentVoiceSpeed = 1.0;
     private List<string> availableVoices = Enum.GetValues<AssistantVoice>().Select(v => v.ToString()).ToList();
-    
+
     // Tool management
     private List<IVoiceTool> availableTools = new();
     private List<IVoiceTool> enabledTools = new();
-    
+
     // Microphone selection related fields
     private List<MicrophoneSelect.MicrophoneInfo> availableMicrophones = new();
     private string selectedMicrophoneId = string.Empty;
@@ -177,11 +177,11 @@
         // Initialize the string value based on the current enum value
         // Note: CurrentVoice is not exposed by VoiceAssistant
         // currentVoiceString = voiceAssistant.CurrentVoice.ToString().ToLower();
-        
+
         // Get all registered tools from DI
         availableTools = ServiceProvider.GetServices<IVoiceTool>().ToList();
         Log(LogLevel.Info, $"Found {availableTools.Count} available tools: {string.Join(", ", availableTools.Select(t => t.Name))}");
-        
+
         // Enable all tools by default
         enabledTools = availableTools.ToList();
 
@@ -189,7 +189,7 @@
         // We'll do that in OnAfterRenderAsync instead
         await Task.CompletedTask;
     }
-    
+
     // Logging method using the centralized logging system
     private void Log(LogLevel level, string message)
     {
@@ -203,14 +203,14 @@
         {
             // Try to get microphones - this will succeed if permission is already granted
             var mics = await voiceAssistant.GetAvailableMicrophonesAsync();
-            
+
             // Check if we have actual device information - actual device labels mean permission is granted
             bool hasRealDeviceNames = mics.Count > 0 && 
                 mics.Any(m => !string.IsNullOrEmpty(m.Name) && !m.Name.StartsWith("Microphone "));
-            
+
             micPermissionGranted = hasRealDeviceNames;
             Log(LogLevel.Info, $"Initial permission check: Permission granted: {micPermissionGranted}, Found {mics.Count} microphones");
-            
+
             if (micPermissionGranted)
             {
                 // If we got devices with real names, permission is granted
@@ -220,14 +220,14 @@
                     Name = m.Name,
                     IsDefault = m.IsDefault
                 }).ToList();
-                
+
                 // Select default or first microphone
                 if (availableMicrophones.Count > 0)
                 {
                     var defaultMic = availableMicrophones.FirstOrDefault(m => m.IsDefault);
                     selectedMicrophoneId = defaultMic?.Id ?? availableMicrophones[0].Id;
                     // Note: SetMicrophoneDevice might need to be implemented differently
-                    
+
                     Log(LogLevel.Info, $"Initially selected microphone: {availableMicrophones.FirstOrDefault(m => m.Id == selectedMicrophoneId)?.Name ?? "Unknown"}");
                 }
             }
@@ -266,14 +266,14 @@
         {
             // Just get available microphones - the JS will check permissions without activating
             var mics = await voiceAssistant.GetAvailableMicrophonesAsync();
-            
+
             // Check if we have actual device information - actual device labels mean permission is granted
             bool hasRealDeviceNames = mics.Count > 0 && 
                 mics.Any(m => !string.IsNullOrEmpty(m.Name) && !m.Name.StartsWith("Microphone "));
-            
+
             micPermissionGranted = hasRealDeviceNames;
             Log(LogLevel.Info, $"Permission check: Permission granted: {micPermissionGranted}, Found {mics.Count} microphones");
-            
+
             if (mics.Count > 0)
             {
                 availableMicrophones = mics.Select(m => new MicrophoneSelect.MicrophoneInfo
@@ -282,7 +282,7 @@
                     Name = m.Name,
                     IsDefault = m.IsDefault
                 }).ToList();
-                
+
                 // Select default or first microphone
                 var defaultMic = availableMicrophones.FirstOrDefault(m => m.IsDefault);
                 if (defaultMic != null)
@@ -321,11 +321,11 @@
             await InvokeAsync(StateHasChanged);
 
             Log(LogLevel.Info, "Explicitly requesting microphone permission...");
-            
+
             // Use the new method that explicitly requests permission and gets labeled devices
             // Request permission by getting devices
             var deviceInfos = await voiceAssistant.GetAvailableMicrophonesAsync();
-            
+
             // Convert to MicrophoneInfo objects
             availableMicrophones = deviceInfos.Select(m => new MicrophoneSelect.MicrophoneInfo
             {
@@ -333,13 +333,13 @@
                 Name = m.Name,
                 IsDefault = m.IsDefault
             }).ToList();
-            
+
             // Check if we now have devices with real names (not placeholders)
             micPermissionGranted = deviceInfos.Count > 0 && 
                 deviceInfos.Any(m => !string.IsNullOrEmpty(m.Name) && !m.Name.StartsWith("Microphone "));
-            
+
             Log(LogLevel.Info, $"After permission request: Permission granted: {micPermissionGranted}, Found {deviceInfos.Count} microphones");
-            
+
             // If we have microphones with permission, select one
             if (micPermissionGranted && availableMicrophones.Count > 0)
             {
@@ -443,7 +443,7 @@
             // Store the currently selected device before starting the session
             string deviceToUse = selectedMicrophoneId;
             string deviceName = availableMicrophones.FirstOrDefault(m => m.Id == deviceToUse)?.Name ?? "default device";
-            
+
             // Apply the selected microphone if it has a value
             if (!string.IsNullOrEmpty(deviceToUse))
             {
@@ -456,6 +456,12 @@
             {
                 Instructions = "Du bist ein freundlicher hilfreicher sprachagent. (Antworte in der Anfragesprache, im Zweifel bitte in Deutsch), Nimm an dein Gegenüber ist ein Experte in der Materie über die ihr gerade redet, also neige eher zu sehr fachlichen Antworten und mach die antworten nur auf Nachfrage leichter verständlich. Sprich schnell mit möglichst kurzen pausen, bring emotion in deine Stimme, lache wenn es passt.",
                 Voice = currentVoice,
+                InputAudioTranscription = new InputAudioTranscription
+                {
+                    Model = "gpt-4o-transcribe",
+                    Prompt = "Expect German with slight accent",
+                    Enabled = true,                   
+                },
                 TalkingSpeed = currentVoiceSpeed,
                 Model = OpenAiRealtimeModel.Gpt520250828,
                 Tools = enabledTools.ToList() // Use the selected tools

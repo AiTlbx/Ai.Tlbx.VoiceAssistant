@@ -12,6 +12,7 @@ using System.Net.Http.Headers;
 using Ai.Tlbx.VoiceAssistant.Interfaces;
 using Ai.Tlbx.VoiceAssistant.Models;
 using Ai.Tlbx.VoiceAssistant.Provider.OpenAi.Models;
+using System.Text.Json.Serialization;
 
 namespace Ai.Tlbx.VoiceAssistant.Provider.OpenAi
 {
@@ -421,7 +422,8 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.OpenAi
                         },
                         transcription = _settings.InputAudioTranscription.Enabled ? new
                         {
-                            model = _settings.InputAudioTranscription.Model
+                            model = _settings.InputAudioTranscription.Model,
+                            prompt = _settings.InputAudioTranscription.Prompt
                         } : null,
                         turn_detection = new
                         {
@@ -449,7 +451,7 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.OpenAi
                 session = session
             };
 
-            var jsonMessage = JsonSerializer.Serialize(sessionConfig, new JsonSerializerOptions { WriteIndented = true });
+            var jsonMessage = JsonSerializer.Serialize(sessionConfig, new JsonSerializerOptions { WriteIndented = true, DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull });
             _logAction(LogLevel.Info, $"Sending explicit session config to OpenAI:\n{jsonMessage}");
             await SendMessageAsync(jsonMessage);
             _logAction(LogLevel.Info, "Session configuration sent to OpenAI");

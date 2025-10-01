@@ -130,7 +130,7 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.OpenAi.Models
     public class InputAudioTranscription
     {
         /// <summary>
-        /// Model to use for transcription.
+        /// Model to use for transcription. (whisper-1, gpt-4o-transcribe-latest, gpt-4o-mini-transcribe, and gpt-4o-transcribe)
         /// </summary>
         public string Model { get; set; } = "whisper-1";
 
@@ -138,5 +138,11 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.OpenAi.Models
         /// Whether to enable transcription.
         /// </summary>
         public bool Enabled { get; set; } = true;
+
+
+        /// <summary>
+        /// An optional text to guide the model's style or continue a previous audio segment. For whisper-1, the prompt is a list of keywords. For gpt-4o-transcribe models, the prompt is a free text string, for example "expect words related to technology".
+        /// </summary>
+        public string? Prompt { get; set; }
     }
 }

@@ -78,7 +78,7 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.OpenAi.Extensions
                 },
                 InputAudioTranscription = new InputAudioTranscription
                 {
-                    Model = "gpt-4o-transcribe-latest",
+                    Model = "gpt-4o-transcribe",
                     Enabled = true
                 },
                 OutputAudioFormat = "pcm16"
