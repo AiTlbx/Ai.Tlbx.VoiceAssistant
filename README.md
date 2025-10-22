@@ -138,20 +138,23 @@ var settings = new OpenAiVoiceSettings
 {
     // Required
     Instructions = "You are a helpful assistant",
-    
-    // Voice options: Alloy, Echo, Fable, Onyx, Nova, Shimmer
+
+    // Voice options: Alloy, Ash, Ballad, Coral, Echo, Sage, Shimmer, Verse, Marin, Cedar
     Voice = AssistantVoice.Alloy,
-    
+
     // Speed: 0.25 to 4.0 (1.0 = normal)
     TalkingSpeed = 1.0,
-    
-    // Model options (latest with emotional responses - recommended)
-    Model = OpenAiRealtimeModel.Gpt520250828,
-    
+
+    // Model (GptRealtime = latest production model, automatically updated)
+    Model = OpenAiRealtimeModel.GptRealtime,
+
     // Optional
-    Temperature = 0.7,
     MaxTokens = 4000,
-    
+
+    // Context management (default: auto-truncate at 80% retention)
+    AutomaticContextTruncation = true,  // Auto-drop old messages vs throw error
+    RetentionRatio = 0.8,               // Keep 80% of context when truncating
+
     // Add tools for extra capabilities
     Tools = { new TimeToolWithSchema() }
 };

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Ai.Tlbx.VoiceAssistant.Interfaces;
 
@@ -40,14 +41,22 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.OpenAi.Models
         public Eagerness Eagerness { get; set; } = Eagerness.auto;
 
         /// <summary>
-        /// The temperature setting for response generation (0.0 to 1.0).
-        /// </summary>
-        public double Temperature { get; set; } = 0.7;
-
-        /// <summary>
         /// Maximum number of tokens for the response.
         /// </summary>
         public int? MaxTokens { get; set; }
+
+        /// <summary>
+        /// Controls automatic context truncation when token limit is reached.
+        /// If true (default), uses retention_ratio strategy. If false, throws error when limit reached.
+        /// </summary>
+        public bool AutomaticContextTruncation { get; set; } = true;
+
+        /// <summary>
+        /// Retention ratio for context truncation (0.0 to 1.0).
+        /// When set, keeps this percentage of context and drops the rest when limit approached.
+        /// Default is 0.8 (keep 80%, drop 20% proactively to preserve prompt cache).
+        /// </summary>
+        public double RetentionRatio { get; set; } = 0.8;
 
         /// <summary>
         /// Turn detection settings for conversation flow.
@@ -121,7 +130,13 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.OpenAi.Models
         /// <summary>
         /// Model is interruptable
         /// </summary>
-        public bool InterruptResponse { get; set; } = true;        
+        public bool InterruptResponse { get; set; } = true;
+
+        /// <summary>
+        /// Idle timeout in milliseconds. If set, triggers a prompt when user is silent for this duration.
+        /// Available in GA API for automatic engagement during silence.
+        /// </summary>
+        public int? IdleTimeoutMs { get; set; }
     }
 
     /// <summary>

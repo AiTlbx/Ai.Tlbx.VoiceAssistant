@@ -403,6 +403,9 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.OpenAi
                 ["instructions"] = _settings.Instructions,
                 //["temperature"] = _settings.Temperature,
                 ["max_output_tokens"] = _settings.MaxTokens?.ToString() ?? "inf",
+                ["truncation"] = _settings.AutomaticContextTruncation
+                    ? new { type = "retention_ratio", retention_ratio = _settings.RetentionRatio }
+                    : new { type = "disabled" },
                 ["tool_choice"] = "auto",
                 ["tools"] = _settings.Tools.Select(tool => new
                 {
@@ -431,6 +434,7 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.OpenAi
                             threshold = _settings.TurnDetection.Threshold,
                             prefix_padding_ms = _settings.TurnDetection.PrefixPaddingMs,
                             silence_duration_ms = _settings.TurnDetection.SilenceDurationMs,
+                            idle_timeout_ms = _settings.TurnDetection.IdleTimeoutMs,
                             create_response = _settings.TurnDetection.CreateResponse,
                             interrupt_response = _settings.TurnDetection.InterruptResponse
                         }
@@ -547,10 +551,10 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.OpenAi
                     case "response.done":
                         await HandleResponseDone(root);
                         break;
-                    case "response.text.delta":
+                    case "response.output_text.delta":
                         HandleTextDelta(root);
                         break;
-                    case "response.text.done":
+                    case "response.output_text.done":
                         await HandleTextDone();
                         break;
                     case "response.function_call_arguments.delta":
@@ -584,6 +588,12 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.OpenAi
                     case "conversation.item.input_audio_transcription.delta":
                     case "conversation.item.added":
                     case "conversation.item.done":
+                    case "conversation.item.retrieved":
+                    case "conversation.item.input_audio_transcription.segment":
+                    case "input_audio_buffer.timeout_triggered":
+                    case "output_audio_buffer.started":
+                    case "output_audio_buffer.stopped":
+                    case "output_audio_buffer.cleared":
                         // These are expected messages that we don't need special handling for
                         break;
                     default:

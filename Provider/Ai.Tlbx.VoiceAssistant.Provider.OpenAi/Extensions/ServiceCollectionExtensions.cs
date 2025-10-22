@@ -54,18 +54,15 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.OpenAi.Extensions
         /// </summary>
         /// <param name="instructions">Custom instructions for the AI assistant.</param>
         /// <param name="voice">The voice to use for responses.</param>
-        /// <param name="temperature">Temperature setting for response generation.</param>
         /// <returns>Configured OpenAI voice settings.</returns>
         public static OpenAiVoiceSettings CreateDefaultOpenAiSettings(
             string instructions = "You are a helpful assistant.",
-            AssistantVoice voice = AssistantVoice.Alloy,
-            double temperature = 0.7)
+            AssistantVoice voice = AssistantVoice.Alloy)
         {
             return new OpenAiVoiceSettings
             {
                 Instructions = instructions,
                 Voice = voice,
-                Temperature = temperature,
                 Model = OpenAiRealtimeModel.Gpt4oRealtimePreview20250603,
                 TurnDetection = new TurnDetection
                 {

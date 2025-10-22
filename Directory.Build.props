@@ -1,7 +1,7 @@
 <Project>
   <!-- Centralized version management for all projects -->
   <PropertyGroup>
-    <Version>5.0.4</Version>
+    <Version>6.0.0</Version>
     <AssemblyVersion>$(Version)</AssemblyVersion>
     <FileVersion>$(Version)</FileVersion>
     
@@ -11,8 +11,8 @@
     <Copyright>Copyright © 2025 TLBX</Copyright>
     
     <!-- Package settings -->
-    <PackageProjectUrl>https://github.com/johanssonjohan/Ai.Tlbx.VoiceAssistant</PackageProjectUrl>
-    <RepositoryUrl>https://github.com/johanssonjohan/Ai.Tlbx.VoiceAssistant</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/AiTlbx/Ai.Tlbx.VoiceAssistant</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/AiTlbx/Ai.Tlbx.VoiceAssistant</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageTags>AI;Voice;Assistant;OpenAI;Realtime;Audio;Speech</PackageTags>

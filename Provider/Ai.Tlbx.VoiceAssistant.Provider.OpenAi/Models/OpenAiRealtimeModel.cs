@@ -7,7 +7,12 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.OpenAi.Models
     /// </summary>
     public enum OpenAiRealtimeModel
     {
-        
+        /// <summary>
+        /// Latest GPT Realtime model (unpinned version, automatically uses newest).
+        /// Recommended for production use.
+        /// </summary>
+        GptRealtime,
+
         /// <summary>
         /// First full release based on GPT5
         /// </summary>
@@ -56,6 +61,7 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.OpenAi.Models
         {
             return model switch
             {
+                OpenAiRealtimeModel.GptRealtime => "gpt-realtime",
                 OpenAiRealtimeModel.Gpt520250828 => "gpt-realtime-2025-08-28",
                 OpenAiRealtimeModel.Gpt4oRealtimePreview20250603 => "gpt-4o-realtime-preview-2025-06-03",
                 OpenAiRealtimeModel.Gpt4oRealtimePreview20241217 => "gpt-4o-realtime-preview-2024-12-17",
