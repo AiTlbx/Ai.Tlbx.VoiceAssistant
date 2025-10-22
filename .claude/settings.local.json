@@ -17,7 +17,10 @@
       "Bash(find:*)",
       "Bash(git clone:*)",
       "Bash(git checkout:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "WebSearch",
+      "WebFetch(domain:developers.openai.com)",
+      "WebFetch(domain:openai.com)"
     ],
     "deny": []
   }
