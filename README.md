@@ -5,6 +5,7 @@
 
 [![NuGet Core](https://img.shields.io/nuget/v/Ai.Tlbx.VoiceAssistant.svg?label=Core)](https://www.nuget.org/packages/Ai.Tlbx.VoiceAssistant/)
 [![NuGet OpenAI](https://img.shields.io/nuget/v/Ai.Tlbx.VoiceAssistant.Provider.OpenAi.svg?label=OpenAI%20Provider)](https://www.nuget.org/packages/Ai.Tlbx.VoiceAssistant.Provider.OpenAi/)
+[![NuGet Google](https://img.shields.io/nuget/v/Ai.Tlbx.VoiceAssistant.Provider.Google.svg?label=Google%20Provider)](https://www.nuget.org/packages/Ai.Tlbx.VoiceAssistant.Provider.Google/)
 [![NuGet Windows](https://img.shields.io/nuget/v/Ai.Tlbx.VoiceAssistant.Hardware.Windows.svg?label=Windows%20Hardware)](https://www.nuget.org/packages/Ai.Tlbx.VoiceAssistant.Hardware.Windows/)
 [![NuGet Linux](https://img.shields.io/nuget/v/Ai.Tlbx.VoiceAssistant.Hardware.Linux.svg?label=Linux%20Hardware)](https://www.nuget.org/packages/Ai.Tlbx.VoiceAssistant.Hardware.Linux/)
 [![NuGet Web](https://img.shields.io/nuget/v/Ai.Tlbx.VoiceAssistant.Hardware.Web.svg?label=Web%20Hardware)](https://www.nuget.org/packages/Ai.Tlbx.VoiceAssistant.Hardware.Web/)
@@ -18,12 +19,13 @@ A simple .NET 9 toolkit for building real-time AI voice assistants. Talk to AI, 
 # Core package (always needed)
 dotnet add package Ai.Tlbx.VoiceAssistant
 
-# AI provider
-dotnet add package Ai.Tlbx.VoiceAssistant.Provider.OpenAi
+# AI provider (pick one or both)
+dotnet add package Ai.Tlbx.VoiceAssistant.Provider.OpenAi   # OpenAI Realtime API
+dotnet add package Ai.Tlbx.VoiceAssistant.Provider.Google   # Google Gemini Live API
 
 # Platform (pick one)
 dotnet add package Ai.Tlbx.VoiceAssistant.Hardware.Windows  # Windows
-dotnet add package Ai.Tlbx.VoiceAssistant.Hardware.Linux    # Linux  
+dotnet add package Ai.Tlbx.VoiceAssistant.Hardware.Linux    # Linux
 dotnet add package Ai.Tlbx.VoiceAssistant.Hardware.Web      # Blazor
 
 # Optional UI components for web
@@ -55,6 +57,37 @@ voiceAssistant.OnMessageAdded = (message) =>
 var settings = new OpenAiVoiceSettings
 {
     Voice = AssistantVoice.Alloy,
+    Instructions = "You are a helpful assistant."
+};
+
+await voiceAssistant.StartAsync(settings);
+Console.ReadKey(); // Talk now, press any key to stop
+await voiceAssistant.StopAsync();
+```
+
+### Console App with Google Gemini
+
+```csharp
+using Ai.Tlbx.VoiceAssistant;
+using Ai.Tlbx.VoiceAssistant.Provider.Google;
+using Ai.Tlbx.VoiceAssistant.Provider.Google.Models;
+using Ai.Tlbx.VoiceAssistant.Hardware.Windows; // or .Hardware.Linux
+using Microsoft.Extensions.DependencyInjection;
+
+var services = new ServiceCollection();
+services.AddVoiceAssistant()
+    .WithGoogle(apiKey: "your-google-api-key")
+    .WithHardware<WindowsAudioDevice>(); // or LinuxAudioDevice
+
+var voiceAssistant = services.BuildServiceProvider()
+    .GetRequiredService<VoiceAssistant>();
+
+voiceAssistant.OnMessageAdded = (message) =>
+    Console.WriteLine($"[{message.Role}]: {message.Content}");
+
+var settings = new GoogleVoiceSettings
+{
+    Voice = GeminiVoice.Puck,
     Instructions = "You are a helpful assistant."
 };
 
@@ -160,6 +193,46 @@ var settings = new OpenAiVoiceSettings
 };
 ```
 
+## Google Settings
+
+```csharp
+var settings = new GoogleVoiceSettings
+{
+    // Required
+    Instructions = "You are a helpful assistant",
+
+    // Voice options: Puck, Charon, Kore, Fenrir, Aoede
+    Voice = GeminiVoice.Puck,
+
+    // Model (defaults to Gemini 2.0 Flash Exp)
+    Model = GeminiModel.Gemini_2_0_Flash_Exp,
+
+    // Language code (e.g., "en-US", "de-DE", "es-ES")
+    LanguageCode = "en-US",
+
+    // Transcription (enables/disables input/output transcription)
+    TranscriptionConfig = new TranscriptionConfig
+    {
+        EnableInputTranscription = true,
+        EnableOutputTranscription = true
+    },
+
+    // Voice Activity Detection (controls turn-taking and interruption)
+    VoiceActivityDetection = new VoiceActivityDetection
+    {
+        StartOfSpeechSensitivity = SpeechSensitivity.HIGH,  // HIGH for reliable detection
+        EndOfSpeechSensitivity = SpeechSensitivity.LOW,     // LOW enables easier interruption
+        PrefixPaddingMs = 100,                              // Audio buffering before speech start
+        SilenceDurationMs = 200,                            // Silence required before ending speech
+        ActivityHandling = ActivityHandling.START_OF_ACTIVITY_INTERRUPTS, // Enable barge-in
+        AutomaticDetection = true
+    },
+
+    // Add tools for extra capabilities
+    Tools = { new TimeToolWithSchema() }
+};
+```
+
 ## WebUI Components
 
 The WebUI package provides ready-made Blazor components:
@@ -243,7 +316,7 @@ That's it! The AI can now call your tool during conversations.
 ## Requirements
 
 - .NET 9.0
-- OpenAI API key
+- API key: OpenAI or Google (depending on provider)
 - **Windows**: Windows 10+
 - **Linux**: `sudo apt-get install libasound2-dev`
 - **Web**: Modern browser with mic permission
