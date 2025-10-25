@@ -2,16 +2,15 @@
 
   <PropertyGroup>
     <TargetFramework>net9.0</TargetFramework>
-    <Version>6.0.1</Version>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <WarningsAsErrors />
-    
+
     <!-- NuGet Package Metadata -->
-    <PackageId>Ai.Tlbx.VoiceAssistant.Provider.OpenAi</PackageId>
-    <Description>OpenAI provider implementation for the Voice Assistant toolkit. Enables real-time conversation with OpenAI's GPT models through WebSocket connections.</Description>
-    <PackageTags>AI;OpenAI;VoiceAssistant;RealTime;Audio;GPT</PackageTags>
+    <PackageId>Ai.Tlbx.VoiceAssistant.Provider.Google</PackageId>
+    <Description>Google Gemini Live API provider implementation for the Voice Assistant toolkit. Enables real-time conversation with Google's Gemini models through WebSocket connections.</Description>
+    <PackageTags>AI;Google;Gemini;VoiceAssistant;RealTime;Audio;LiveAPI</PackageTags>
     <GeneratePackageOnBuild Condition="'$(Configuration)' == 'Release'">true</GeneratePackageOnBuild>
     <PackageOutputPath>..\..\nupkg</PackageOutputPath>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>

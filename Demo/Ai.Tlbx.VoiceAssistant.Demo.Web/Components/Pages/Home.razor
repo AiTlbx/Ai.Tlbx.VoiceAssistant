@@ -2,18 +2,23 @@
 @using Ai.Tlbx.VoiceAssistant
 @using Ai.Tlbx.VoiceAssistant.Provider.OpenAi
 @using Ai.Tlbx.VoiceAssistant.Provider.OpenAi.Models
+@using Ai.Tlbx.VoiceAssistant.Provider.Google
+@using Ai.Tlbx.VoiceAssistant.Provider.Google.Models
 @using Ai.Tlbx.VoiceAssistant.WebUi.Components
 @using Ai.Tlbx.VoiceAssistant.Demo.Web
+@using Ai.Tlbx.VoiceAssistant.Demo.Web.Services
 @using Ai.Tlbx.VoiceAssistant.Models
 @using Ai.Tlbx.VoiceAssistant.Interfaces
 @using System.Diagnostics
 @using Microsoft.Extensions.DependencyInjection
 
 @rendermode InteractiveServer
-@inject VoiceAssistant voiceAssistant
 @inject IJSRuntime JS
 @inject IServiceProvider ServiceProvider
-@implements IDisposable
+@inject IVoiceProviderFactory ProviderFactory
+@inject IAudioHardwareAccess HardwareAccess
+@inject Action<LogLevel, string> LogAction
+@implements IAsyncDisposable
 
 <PageTitle>AI Voice Chat</PageTitle>
 
@@ -36,51 +41,57 @@
 
                             <div class="p-3 space-y-3">
                                 <!-- Talk Button -->
-                                <AiTalkControl OnStartTalking="StartSession" OnStopTalking="StopSession" IsTalking="voiceAssistant.IsRecording" Loading="voiceAssistant.IsConnecting || voiceAssistant.IsRecording" />
+                                <AiTalkControl OnStartTalking="StartSession" OnStopTalking="StopSession" IsTalking="voiceAssistant?.IsRecording ?? false" Loading="(voiceAssistant?.IsConnecting ?? false) || (voiceAssistant?.IsRecording ?? false)" />
+
+                                <!-- Provider Selection -->
+                                <div>
+                                    <label for="providerSelect" class="block text-xs font-medium text-gray-600 mb-1">AI Provider</label>
+                                    <ProviderSelect AvailableProviders="@availableProviders" @bind-SelectedProvider="@selectedProviderString" Disabled="@((voiceAssistant?.IsConnecting ?? false) || (voiceAssistant?.IsRecording ?? false))" />
+                                </div>
 
                                 <!-- Voice Selection -->
                                 <div>
                                     <label for="voiceSelect" class="block text-xs font-medium text-gray-600 mb-1">Voice</label>
-                                    <VoiceSelect AvailableVoices="@availableVoices" @bind-SelectedVoice="@currentVoiceString" Disabled="@(voiceAssistant.IsConnecting || voiceAssistant.IsRecording)" />
+                                    <VoiceSelect AvailableVoices="@availableVoices" @bind-SelectedVoice="@currentVoiceString" Disabled="@((voiceAssistant?.IsConnecting ?? false) || (voiceAssistant?.IsRecording ?? false))" />
                                 </div>
 
                                 <!-- Voice Speed -->
-                                <VoiceSpeedSlider SelectedSpeed="@currentVoiceSpeed" SelectedSpeedChanged="OnVoiceSpeedChanged" Disabled="@(voiceAssistant.IsConnecting || voiceAssistant.IsRecording)" />
+                                <VoiceSpeedSlider SelectedSpeed="@currentVoiceSpeed" SelectedSpeedChanged="OnVoiceSpeedChanged" Disabled="@((voiceAssistant?.IsConnecting ?? false) || (voiceAssistant?.IsRecording ?? false))" />
 
                                 <!-- Tool Selection -->
                                 <div>
-                                    <ToolSelector AvailableTools="@availableTools" 
-                                                 @bind-EnabledTools="@enabledTools" 
-                                                 Disabled="@(voiceAssistant.IsConnecting || voiceAssistant.IsRecording)" />
+                                    <ToolSelector AvailableTools="@availableTools"
+                                                 @bind-EnabledTools="@enabledTools"
+                                                 Disabled="@((voiceAssistant?.IsConnecting ?? false) || (voiceAssistant?.IsRecording ?? false))" />
                                 </div>
 
                                 <!-- Microphone Selection -->
                                 <div>
                                     <label class="block text-xs font-medium text-gray-600 mb-1">Microphone</label>
-                                    <MicrophoneSelect AvailableMicrophones="availableMicrophones" 
-                                                     @bind-SelectedMicrophoneId="selectedMicrophoneId" 
-                                                     MicPermissionGranted="micPermissionGranted" 
-                                                     OnRequestPermission="RequestMicrophonePermission" 
-                                                     Disabled="@(voiceAssistant.IsConnecting || voiceAssistant.IsRecording)" />
+                                    <MicrophoneSelect AvailableMicrophones="availableMicrophones"
+                                                     @bind-SelectedMicrophoneId="selectedMicrophoneId"
+                                                     MicPermissionGranted="micPermissionGranted"
+                                                     OnRequestPermission="RequestMicrophonePermission"
+                                                     Disabled="@((voiceAssistant?.IsConnecting ?? false) || (voiceAssistant?.IsRecording ?? false))" />
                                 </div>
 
                                 <!-- Action Buttons -->
                                 <div class="space-y-2">
                                     <button class="w-full py-2 px-3 rounded-md bg-gray-600 text-white text-sm font-medium hover:bg-gray-700 transition-colors flex items-center justify-center"
                                     @onclick="ClearChat"
-                                    disabled="@(voiceAssistant.IsConnecting || voiceAssistant.IsRecording)">
+                                    disabled="@((voiceAssistant?.IsConnecting ?? false) || (voiceAssistant?.IsRecording ?? false))">
                                         <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1.5" viewBox="0 0 20 20" fill="currentColor">
                                             <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" />
                                         </svg>
                                         Clear Chat
                                     </button>
 
-                                    <MicTestWidget OnStartTest="TestMicrophone" Loading="voiceAssistant.IsMicrophoneTesting || voiceAssistant.IsConnecting || voiceAssistant.IsRecording" />
+                                    <MicTestWidget OnStartTest="TestMicrophone" Loading="(voiceAssistant?.IsMicrophoneTesting ?? false) || (voiceAssistant?.IsConnecting ?? false) || (voiceAssistant?.IsRecording ?? false)" />
                                 </div>
 
                                 <!-- Status -->
                                 <div>
-                                    <StatusWidget ConnectionStatus="@voiceAssistant.ConnectionStatus" Error="@voiceAssistant.LastErrorMessage" IsMicrophoneTesting="@voiceAssistant.IsMicrophoneTesting" />
+                                    <StatusWidget ConnectionStatus="@(voiceAssistant?.ConnectionStatus ?? "")" Error="@(voiceAssistant?.LastErrorMessage ?? "")" IsMicrophoneTesting="@(voiceAssistant?.IsMicrophoneTesting ?? false)" />
                                 </div>
 
                                 <!-- Connection Events -->
@@ -110,7 +121,7 @@
                             </div>
 
                             <div class="px-3 py-2 border-t border-gray-200 bg-white">
-                                @if (voiceAssistant.IsRecording)
+                                @if (voiceAssistant?.IsRecording ?? false)
                                 {
                                     <div class="flex items-center text-red-600 text-sm">
                                         <div class="relative h-2 w-2 mr-2">
@@ -133,24 +144,40 @@
     </CascadingValue>
 </CascadingValue>
 
-@code 
+@code
 {
+    private VoiceAssistant? voiceAssistant;
     private ElementReference chatContainer;
     private bool showDebugMode = false;
-    private AssistantVoice currentVoice = AssistantVoice.Alloy;
+
+    // Provider management
+    private List<string> availableProviders = new() { "OpenAI", "Google" };
+    private string _selectedProviderString = "OpenAI";
+    private string selectedProviderString
+    {
+        get => _selectedProviderString;
+        set
+        {
+            if (_selectedProviderString != value && voiceAssistant != null && !voiceAssistant.IsConnecting && !voiceAssistant.IsRecording)
+            {
+                _selectedProviderString = value;
+                Log(LogLevel.Info, $"Provider changed to: {_selectedProviderString}");
+                UpdateAvailableVoicesForProvider();
+                RecreateVoiceAssistant();
+            }
+        }
+    }
+
+    // Voice management (provider-specific)
     private string _currentVoiceString = "Alloy";
-    private string currentVoiceString 
+    private string currentVoiceString
     {
         get => _currentVoiceString;
         set
         {
             _currentVoiceString = value;
-            if (Enum.TryParse<AssistantVoice>(value, out var voice))
-            {
-                currentVoice = voice;
-                sessionSettings = sessionSettings with { SelectedVoice = value };
-                Log(LogLevel.Info, $"Voice changed to: {currentVoice}");
-            }
+            sessionSettings = sessionSettings with { SelectedVoice = value };
+            Log(LogLevel.Info, $"Voice changed to: {_currentVoiceString}");
         }
     }
     private double currentVoiceSpeed = 1.0;
@@ -170,13 +197,8 @@
 
     protected override async Task OnInitializedAsync()
     {
-        voiceAssistant.OnConnectionStatusChanged = OnConnectionStatusChanged;
-        voiceAssistant.OnMessageAdded = OnMessageAdded;
-        voiceAssistant.OnMicrophoneDevicesChanged = OnMicrophoneDevicesChanged;
-
-        // Initialize the string value based on the current enum value
-        // Note: CurrentVoice is not exposed by VoiceAssistant
-        // currentVoiceString = voiceAssistant.CurrentVoice.ToString().ToLower();
+        // Create initial VoiceAssistant with OpenAI provider
+        RecreateVoiceAssistant();
 
         // Get all registered tools from DI
         availableTools = ServiceProvider.GetServices<IVoiceTool>().ToList();
@@ -185,9 +207,32 @@
         // Enable all tools by default
         enabledTools = availableTools.ToList();
 
-        // Don't check for microphone permission in OnInitializedAsync (during prerender)
-        // We'll do that in OnAfterRenderAsync instead
         await Task.CompletedTask;
+    }
+
+    private void RecreateVoiceAssistant()
+    {
+        // Dispose old instance if exists
+        if (voiceAssistant != null)
+        {
+            voiceAssistant.OnConnectionStatusChanged = null;
+            voiceAssistant.OnMessageAdded = null;
+            voiceAssistant.OnMicrophoneDevicesChanged = null;
+        }
+
+        // Create provider
+        var providerType = _selectedProviderString == "OpenAI" ? VoiceProviderType.OpenAI : VoiceProviderType.Google;
+        var provider = ProviderFactory.CreateProvider(providerType);
+
+        // Create new VoiceAssistant
+        voiceAssistant = new VoiceAssistant(HardwareAccess, provider, LogAction);
+
+        // Wire up callbacks
+        voiceAssistant.OnConnectionStatusChanged = OnConnectionStatusChanged;
+        voiceAssistant.OnMessageAdded = OnMessageAdded;
+        voiceAssistant.OnMicrophoneDevicesChanged = OnMicrophoneDevicesChanged;
+
+        Log(LogLevel.Info, $"Voice Assistant recreated with {_selectedProviderString} provider");
     }
 
     // Logging method using the centralized logging system
@@ -197,10 +242,26 @@
         Debug.WriteLine($"WebDemoLog: [{level}] [Home] {message}");
     }
 
+    private void UpdateAvailableVoicesForProvider()
+    {
+        if (_selectedProviderString == "OpenAI")
+        {
+            availableVoices = Enum.GetValues<AssistantVoice>().Select(v => v.ToString()).ToList();
+            _currentVoiceString = "Alloy";
+        }
+        else if (_selectedProviderString == "Google")
+        {
+            availableVoices = Enum.GetValues<GoogleVoice>().Select(v => v.ToString()).ToList();
+            _currentVoiceString = "Aoede";
+        }
+    }
+
     private async Task CheckMicrophonePermission()
     {
         try
         {
+            if (voiceAssistant == null) return;
+
             // Try to get microphones - this will succeed if permission is already granted
             var mics = await voiceAssistant.GetAvailableMicrophonesAsync();
 
@@ -264,6 +325,8 @@
     {
         try
         {
+            if (voiceAssistant == null) return;
+
             // Just get available microphones - the JS will check permissions without activating
             var mics = await voiceAssistant.GetAvailableMicrophonesAsync();
 
@@ -316,8 +379,9 @@
     {
         try
         {
+            if (voiceAssistant == null) return;
+
             // Instead of setting isLoadingMicrophones, we'll rely on micPermissionGranted for UI state
-            // isLoadingMicrophones = true;
             await InvokeAsync(StateHasChanged);
 
             Log(LogLevel.Info, "Explicitly requesting microphone permission...");
@@ -440,6 +504,12 @@
     {
         try
         {
+            if (voiceAssistant == null)
+            {
+                Log(LogLevel.Error, "VoiceAssistant not initialized");
+                return;
+            }
+
             // Store the currently selected device before starting the session
             string deviceToUse = selectedMicrophoneId;
             string deviceName = availableMicrophones.FirstOrDefault(m => m.Id == deviceToUse)?.Name ?? "default device";
@@ -447,37 +517,73 @@
             // Apply the selected microphone if it has a value
             if (!string.IsNullOrEmpty(deviceToUse))
             {
-                // Note: SetMicrophoneDevice might need to be implemented differently
                 Log(LogLevel.Info, $"Using microphone: {deviceName} for recording session");
             }
 
-            // Get current settings or create new settings
-            var settings = new OpenAiVoiceSettings
+            // Create provider-specific settings
+            IVoiceSettings settings;
+
+            var instructions = "Du bist ein freundlicher hilfreicher sprachagent. (Antworte in der Anfragesprache, im Zweifel bitte in Deutsch), Nimm an dein Gegenüber ist ein Experte in der Materie über die ihr gerade redet, also neige eher zu sehr fachlichen Antworten und mach die antworten nur auf Nachfrage leichter verständlich. Sprich schnell mit möglichst kurzen pausen, bring emotion in deine Stimme, lache wenn es passt.";
+
+            if (_selectedProviderString == "OpenAI")
             {
-                Instructions = "Du bist ein freundlicher hilfreicher sprachagent. (Antworte in der Anfragesprache, im Zweifel bitte in Deutsch), Nimm an dein Gegenüber ist ein Experte in der Materie über die ihr gerade redet, also neige eher zu sehr fachlichen Antworten und mach die antworten nur auf Nachfrage leichter verständlich. Sprich schnell mit möglichst kurzen pausen, bring emotion in deine Stimme, lache wenn es passt.",
-                Voice = currentVoice,
-                InputAudioTranscription = new InputAudioTranscription
+                if (!Enum.TryParse<AssistantVoice>(_currentVoiceString, out var openAiVoice))
                 {
-                    Model = "gpt-4o-transcribe",
-                    Prompt = "Expect German with slight accent",
-                    Enabled = true,                   
-                },
-                TalkingSpeed = currentVoiceSpeed,
-                Model = OpenAiRealtimeModel.Gpt520250828,
-                Tools = enabledTools.ToList() // Use the selected tools
-            };
-            
-            Log(LogLevel.Info, $"Starting session with voice: {currentVoice}");
-            
+                    openAiVoice = AssistantVoice.Alloy;
+                }
+
+                settings = new OpenAiVoiceSettings
+                {
+                    Instructions = instructions,
+                    Voice = openAiVoice,
+                    InputAudioTranscription = new InputAudioTranscription
+                    {
+                        Model = "gpt-4o-transcribe",
+                        Prompt = "Expect German with slight accent",
+                        Enabled = true,
+                    },
+                    TalkingSpeed = currentVoiceSpeed,
+                    Model = OpenAiRealtimeModel.Gpt520250828,
+                    Tools = enabledTools.ToList()
+                };
+
+                Log(LogLevel.Info, $"Starting OpenAI session with voice: {openAiVoice}");
+            }
+            else // Google
+            {
+                if (!Enum.TryParse<GoogleVoice>(_currentVoiceString, out var googleVoice))
+                {
+                    googleVoice = GoogleVoice.Aoede;
+                }
+
+                settings = new GoogleVoiceSettings
+                {
+                    Instructions = instructions,
+                    Voice = googleVoice,
+                    TalkingSpeed = currentVoiceSpeed,
+                    Model = GoogleModel.Gemini20FlashLive001,
+                    ResponseModality = "AUDIO",
+                    LanguageCode = "de-DE", // Set to German - change to "en-US" for English or null for auto-detect
+                    Tools = enabledTools.ToList(),
+                    TranscriptionConfig = new AudioTranscriptionConfig
+                    {
+                        EnableInputTranscription = true,
+                        EnableOutputTranscription = true
+                    }
+                };
+
+                Log(LogLevel.Info, $"Starting Google session with voice: {googleVoice}");
+            }
+
             // Start the session with the configured settings
             await voiceAssistant.StartAsync(settings);
-            
+
             // Even if permission state is lost in the process, we still know we have a valid device
             if (!micPermissionGranted && availableMicrophones.Count > 0)
             {
                 micPermissionGranted = true;
             }
-            
+
             await InvokeAsync(StateHasChanged);
         }
         catch (Exception ex)
@@ -491,14 +597,16 @@
     {
         try
         {
+            if (voiceAssistant == null) return;
+
             await voiceAssistant.StopAsync();
-            
+
             // Ensure mic permission state is preserved after stopping
             if (!micPermissionGranted && availableMicrophones.Count > 0)
             {
                 micPermissionGranted = true;
             }
-            
+
             await InvokeAsync(StateHasChanged);
         }
         catch (Exception ex)
@@ -510,7 +618,7 @@
 
     private void ClearChat()
     {
-        voiceAssistant.ClearChatHistory();
+        voiceAssistant?.ClearChatHistory();
         InvokeAsync(StateHasChanged);
     }
 
@@ -518,25 +626,30 @@
     {
         try
         {
+            if (voiceAssistant == null)
+            {
+                Log(LogLevel.Error, "VoiceAssistant not initialized");
+                return;
+            }
+
             // Store the currently selected device before testing
             string deviceToUse = selectedMicrophoneId;
             string deviceName = availableMicrophones.FirstOrDefault(m => m.Id == deviceToUse)?.Name ?? "default device";
-            
+
             // Apply the selected microphone if it has a value
             if (!string.IsNullOrEmpty(deviceToUse))
             {
-                // Note: SetMicrophoneDevice might need to be implemented differently
                 Log(LogLevel.Info, $"Testing microphone: {deviceName}");
             }
-            
+
             await voiceAssistant.TestMicrophoneAsync();
-            
+
             // Even if permission state is lost in the process, we still know we have a valid device
             if (!micPermissionGranted && availableMicrophones.Count > 0)
             {
                 micPermissionGranted = true;
             }
-            
+
             await InvokeAsync(StateHasChanged);
         }
         catch (Exception ex)
@@ -546,11 +659,15 @@
         }
     }
 
-    public void Dispose()
+    public async ValueTask DisposeAsync()
     {
-        voiceAssistant.OnConnectionStatusChanged = null;
-        voiceAssistant.OnMessageAdded = null;
-        voiceAssistant.OnMicrophoneDevicesChanged = null;
+        if (voiceAssistant != null)
+        {
+            voiceAssistant.OnConnectionStatusChanged = null;
+            voiceAssistant.OnMessageAdded = null;
+            voiceAssistant.OnMicrophoneDevicesChanged = null;
+            await voiceAssistant.DisposeAsync();
+        }
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)

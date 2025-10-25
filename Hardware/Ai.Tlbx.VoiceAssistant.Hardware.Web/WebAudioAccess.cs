@@ -227,11 +227,20 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Web
 
             try
             {
+                if (_audioDataCallCount % 50 == 1)
+                {
+                    Log(LogLevel.Info, $"[AUDIO-CAPTURE] Invoking handler with audio data: {base64EncodedPcm16Audio.Length} bytes");
+                }
                 _audioDataReceivedHandler.Invoke(this, new MicrophoneAudioReceivedEventArgs(base64EncodedPcm16Audio));
+                if (_audioDataCallCount % 50 == 1)
+                {
+                    Log(LogLevel.Info, $"[AUDIO-CAPTURE] Handler invoked successfully");
+                }
             }
             catch (Exception ex)
             {
                 Log(LogLevel.Error, $"Error invoking _audioDataReceivedHandler: {ex.Message}");
+                Log(LogLevel.Error, $"Stack trace: {ex.StackTrace}");
             }
 
             return Task.CompletedTask;

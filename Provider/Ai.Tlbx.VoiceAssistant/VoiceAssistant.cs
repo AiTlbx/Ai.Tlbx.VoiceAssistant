@@ -488,19 +488,39 @@ namespace Ai.Tlbx.VoiceAssistant
             };
         }
 
+        private int _audioReceivedCount = 0;
+
         private async void OnAudioDataReceived(object sender, MicrophoneAudioReceivedEventArgs e)
         {
             try
             {
+                _audioReceivedCount++;
+                if (_audioReceivedCount % 50 == 1)
+                {
+                    _logAction(LogLevel.Info, $"[VA-AUDIO] OnAudioDataReceived called {_audioReceivedCount} times, IsConnected: {_provider.IsConnected}, IsTesting: {_isMicrophoneTesting}, AudioLength: {e.Base64EncodedPcm16Audio?.Length ?? 0}");
+                }
+
                 if (_provider.IsConnected && !_isMicrophoneTesting)
                 {
+                    if (_audioReceivedCount % 50 == 1)
+                    {
+                        _logAction(LogLevel.Info, $"[VA-AUDIO] Calling ProcessAudioAsync on provider");
+                    }
                     await _provider.ProcessAudioAsync(e.Base64EncodedPcm16Audio);
+                }
+                else
+                {
+                    if (_audioReceivedCount % 50 == 1)
+                    {
+                        _logAction(LogLevel.Warn, $"[VA-AUDIO] Skipping audio - IsConnected: {_provider.IsConnected}, IsTesting: {_isMicrophoneTesting}");
+                    }
                 }
             }
             catch (Exception ex)
             {
                 _lastErrorMessage = ex.Message;
                 _logAction(LogLevel.Error, $"Error processing audio data: {ex.Message}");
+                _logAction(LogLevel.Error, $"Stack trace: {ex.StackTrace}");
             }
         }
 

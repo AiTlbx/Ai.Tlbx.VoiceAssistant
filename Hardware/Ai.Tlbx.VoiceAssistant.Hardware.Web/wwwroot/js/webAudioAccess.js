@@ -259,7 +259,7 @@ async function initAudioWithUserInteraction() {
         const stream = await navigator.mediaDevices.getUserMedia({
             audio: {
                 channelCount: 1,
-                     sampleRate: playbackSampleRate, // Use consistent rate
+                sampleRate: playbackSampleRate,
                 echoCancellation: true,
                 noiseSuppression: true,
                 autoGainControl: true
@@ -566,20 +566,17 @@ async function startRecording(dotNetObj, intervalMs = 500, deviceId = null) {
     dotNetReference = dotNetObj; // Store reference
 
     try {
-        // Always enable echo cancellation - simplest and most reliable solution
-        // Modern browsers have excellent echo cancellation that works well with all devices
+        // Enable echo cancellation to remove playback signal from microphone input
         logNormal(`Using echo cancellation for device: ${deviceId || 'default'}`);
-        
+
         const constraints = {
             audio: {
                 channelCount: 1,
-                // Use higher sample rate to avoid telephony rates that trigger SCO
                 sampleRate: { ideal: 48000, min: 44100 },
-                // Always enable echo cancellation and audio processing
                 echoCancellation: true,
                 noiseSuppression: true,
                 autoGainControl: true,
-                ...(deviceId && { deviceId: { exact: deviceId } }) // Apply specific device ID if provided
+                ...(deviceId && { deviceId: { exact: deviceId } })
             },
             video: false
         };

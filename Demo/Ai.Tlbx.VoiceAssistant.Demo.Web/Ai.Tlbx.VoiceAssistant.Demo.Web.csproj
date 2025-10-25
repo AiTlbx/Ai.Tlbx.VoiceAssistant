@@ -9,12 +9,14 @@
     <ProjectReference Include="..\..\Hardware\Ai.Tlbx.VoiceAssistant.Hardware.Web\Ai.Tlbx.VoiceAssistant.Hardware.Web.csproj" />
     <ProjectReference Include="..\..\Provider\Ai.Tlbx.VoiceAssistant\Ai.Tlbx.VoiceAssistant.csproj" />
     <ProjectReference Include="..\..\Provider\Ai.Tlbx.VoiceAssistant.Provider.OpenAi\Ai.Tlbx.VoiceAssistant.Provider.OpenAi.csproj" />
+    <ProjectReference Include="..\..\Provider\Ai.Tlbx.VoiceAssistant.Provider.Google\Ai.Tlbx.VoiceAssistant.Provider.Google.csproj" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(Configuration)' == 'Release'">
     <ProjectReference Include="..\..\Hardware\Ai.Tlbx.VoiceAssistant.Hardware.Web\Ai.Tlbx.VoiceAssistant.Hardware.Web.csproj" />
     <PackageReference Include="Ai.Tlbx.VoiceAssistant" Version="*" />
     <PackageReference Include="Ai.Tlbx.VoiceAssistant.Provider.OpenAi" Version="*" />
+    <PackageReference Include="Ai.Tlbx.VoiceAssistant.Provider.Google" Version="*" />
   </ItemGroup>
 
   <ItemGroup>

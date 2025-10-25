@@ -1,6 +1,4 @@
 ﻿@inherits LayoutComponentBase
-@using Ai.Tlbx.VoiceAssistant
-@inject VoiceAssistant voiceAssistant
 @using Ai.Tlbx.VoiceAssistant.Demo.Web
 
 <div class="page">
@@ -10,9 +8,7 @@
         </div>
 
         <article class="content px-4">
-            <CascadingValue Value="voiceAssistant">
-                @Body
-            </CascadingValue>
+            @Body
         </article>
     </main>
 </div>
