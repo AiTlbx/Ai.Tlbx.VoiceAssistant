@@ -17,9 +17,6 @@
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
   </PropertyGroup>
 
-  <ItemGroup>
-    <PackageReference Include="System.Net.WebSockets.Client" Version="4.3.2" />
-  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Ai.Tlbx.VoiceAssistant\Ai.Tlbx.VoiceAssistant.csproj" />
