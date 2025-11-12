@@ -46,7 +46,7 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.Google.Extensions
             {
                 Instructions = instructions,
                 Voice = voice,
-                Model = GoogleModel.Gemini20FlashLive001,
+                Model = GoogleModel.Gemini25FlashNativeAudio,
                 ResponseModality = "AUDIO",
                 LanguageCode = languageCode,
                 VoiceActivityDetection = new VoiceActivityDetection
