@@ -25,7 +25,10 @@
       "WebFetch(domain:ai.google.dev)",
       "WebFetch(domain:github.com)",
       "WebFetch(domain:gist.github.com)",
-      "Bash(dotnet clean:*)"
+      "Bash(dotnet clean:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)"
     ],
     "deny": []
   }

@@ -74,31 +74,40 @@ Write-Host "Current git hash: $gitHash"
 $propsFilePath = Join-Path $PSScriptRoot "Directory.Build.props"
 
 # Read current version from Directory.Build.props
-if (Test-Path $propsFilePath) 
+if (Test-Path $propsFilePath)
 {
     $propsContent = Get-Content $propsFilePath -Raw
-    if ($propsContent -match '<Version>(\d+)\.(\d+)\.(\d+)</Version>') 
+    if ($propsContent -match '<Version>(\d+)\.(\d+)\.(\d+)</Version>')
     {
         $major = [int]$Matches[1]
         $minor = [int]$Matches[2]
         $patch = [int]$Matches[3]
-        
+
+        $currentVersion = "$major.$minor.$patch"
+
         # Increment patch version
         $patch++
-        
+
         $newVersion = "$major.$minor.$patch"
     }
-    else 
+    else
     {
         Write-Error "Could not find Version in Directory.Build.props"
         exit 1
     }
-} 
-else 
+}
+else
 {
     Write-Error "Directory.Build.props not found"
     exit 1
 }
+
+Write-Host ""
+Write-Host "========================================" -ForegroundColor Cyan
+Write-Host "  Current version: $currentVersion" -ForegroundColor Yellow
+Write-Host "  Will publish:    $newVersion" -ForegroundColor Green
+Write-Host "========================================" -ForegroundColor Cyan
+Write-Host ""
 
 # Format version - using semantic version only (no git hash)
 $fullVersion = "$newVersion"
@@ -106,7 +115,6 @@ $fullVersion = "$newVersion"
 # Update the version in Directory.Build.props
 $propsContent = $propsContent -replace '<Version>\d+\.\d+\.\d+</Version>', "<Version>$newVersion</Version>"
 $propsContent | Out-File -FilePath $propsFilePath -NoNewline
-Write-Host "Updated version to: $fullVersion"
 
 # Check for NuGet API key in environment
 $apiKey = $env:NUGET_API_KEY
@@ -228,27 +236,40 @@ git add $versionFilePath
 git commit -m "Increment version to $newVersion"
 git push
 
-Write-Host "Package building completed."
-Write-Host "NuGet packages are available in: $nupkgDir"
+Write-Host ""
+Write-Host "========================================" -ForegroundColor Cyan
+Write-Host "  PUBLISH SUMMARY" -ForegroundColor Cyan
+Write-Host "========================================" -ForegroundColor Cyan
+Write-Host "  Published version: $newVersion" -ForegroundColor Green
+Write-Host "  Packages location: $nupkgDir" -ForegroundColor Yellow
+Write-Host ""
 
-if ($willPublish) 
+if ($willPublish)
 {
-    if ($publishedPackages.Count -gt 0) 
+    if ($publishedPackages.Count -gt 0)
     {
-        Write-Host "Successfully published packages:" -ForegroundColor Green
-        foreach ($pkgName in $publishedPackages) 
+        Write-Host "  Successfully published $($publishedPackages.Count) packages:" -ForegroundColor Green
+        foreach ($pkgName in $publishedPackages)
         {
-            Write-Host "  - $pkgName" -ForegroundColor Green
+            Write-Host "    - $pkgName" -ForegroundColor Green
         }
     }
-    
-    if (-not $allPackagesSuccessful) 
+
+    Write-Host ""
+    if (-not $allPackagesSuccessful)
     {
-        Write-Host "Some packages were not published successfully. See errors above." -ForegroundColor Red
+        Write-Host "  Some packages were not published successfully. See errors above." -ForegroundColor Red
+        Write-Host "========================================" -ForegroundColor Cyan
         exit 1
     }
-    else 
+    else
     {
-        Write-Host "All packages were published successfully." -ForegroundColor Green
+        Write-Host "  All packages published successfully to NuGet.org!" -ForegroundColor Green
+        Write-Host "========================================" -ForegroundColor Cyan
     }
+}
+else
+{
+    Write-Host "  Packages built but not published (no API key)" -ForegroundColor Yellow
+    Write-Host "========================================" -ForegroundColor Cyan
 } 
