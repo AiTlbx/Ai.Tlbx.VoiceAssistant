@@ -24,7 +24,8 @@
       "WebFetch(domain:docs.x.ai)",
       "WebFetch(domain:ai.google.dev)",
       "WebFetch(domain:github.com)",
-      "WebFetch(domain:gist.github.com)"
+      "WebFetch(domain:gist.github.com)",
+      "Bash(dotnet clean:*)"
     ],
     "deny": []
   }
