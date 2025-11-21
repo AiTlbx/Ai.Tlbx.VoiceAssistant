@@ -270,11 +270,8 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Web
             lock (_audioLock)
             {
                 // Store both the audio data and sample rate
-                _audioQueue.Enqueue($"{base64EncodedPcm16Audio}|{sampleRate}");                    
-                // Reduced logging - only log if queue is getting long (potential issue)
-                if (_audioQueue.Count > 5)
-                    Log(LogLevel.Warn, $"Audio queue building up: {_audioQueue.Count} items");
-                
+                _audioQueue.Enqueue($"{base64EncodedPcm16Audio}|{sampleRate}");
+
                 // If nothing is currently playing, start the audio processing
                 if (!_isPlaying)
                 {
@@ -350,9 +347,6 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Web
                     if (_audioQueue.Count > 0)
                     {
                         nextChunk = _audioQueue.Dequeue();
-                        // Reduced logging - only log if queue is building up (potential issue)
-                    if (_audioQueue.Count > 10)
-                        Log(LogLevel.Warn, $"Audio queue building up: {_audioQueue.Count} items remaining");
                     }
                 }
 

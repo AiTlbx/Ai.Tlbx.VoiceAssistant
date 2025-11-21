@@ -18,12 +18,12 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.Google.Models
         /// <summary>
         /// Audio buffering duration before confirming speech start (milliseconds).
         /// </summary>
-        public int PrefixPaddingMs { get; set; } = 100;
+        public int PrefixPaddingMs { get; set; } = 20;
 
         /// <summary>
         /// Required silence duration before ending speech detection (milliseconds).
         /// </summary>
-        public int SilenceDurationMs { get; set; } = 200;
+        public int SilenceDurationMs { get; set; } = 100;
 
         /// <summary>
         /// How user activity affects ongoing AI generation (interruption behavior).

@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using Ai.Tlbx.VoiceAssistant.Interfaces;
 using Ai.Tlbx.VoiceAssistant.Managers;
@@ -27,6 +28,12 @@ namespace Ai.Tlbx.VoiceAssistant
         
         // Static cache for generated beeps (lazy-initialized)
         private static readonly Dictionary<(int frequency, int duration, int sampleRate), string> _beepCache = new();
+
+#if DEBUG
+        // 🎤💀 EXPERIMENTAL: Sample skip percentage for bandwidth testing (0 = no skip, 20 = skip 20% of samples)
+        // WARNING: This violates Nyquist theorem and will introduce aliasing. For science only!
+        private const int SAMPLE_SKIP_PERCENTAGE = 0; // Set to 5, 10, 20 etc to test
+#endif
         
         // UI Callbacks - Direct actions for simple 1:1 communication
         /// <summary>
@@ -311,11 +318,23 @@ namespace Ai.Tlbx.VoiceAssistant
                 
                 ReportStatus("Playing back recorded audio...");
                 _logAction(LogLevel.Info, $"Playing back {recordedAudioChunks.Count} audio chunks");
-                
+
+#if DEBUG
+                if (SAMPLE_SKIP_PERCENTAGE > 0)
+                {
+                    _logAction(LogLevel.Warn, $"🎤💀 MICROPHONE TEST: Sample skip filter ({SAMPLE_SKIP_PERCENTAGE}%) will be applied to playback - listen for artifacts!");
+                }
+#endif
+
                 // Play back all recorded chunks
                 foreach (var audioChunk in recordedAudioChunks)
                 {
-                    _hardwareAccess.PlayAudio(audioChunk, 24000);
+#if DEBUG
+                    var audioToPlay = ApplySampleSkipFilter(audioChunk);
+#else
+                    var audioToPlay = audioChunk;
+#endif
+                    _hardwareAccess.PlayAudio(audioToPlay, 24000);
                 }
                 
                 // Play final success beep (660 Hz for 300ms)
@@ -488,6 +507,64 @@ namespace Ai.Tlbx.VoiceAssistant
             };
         }
 
+#if DEBUG
+        /// <summary>
+        /// 🎤💀 EXPERIMENTAL: Skips samples from base64 PCM16 audio for bandwidth testing.
+        /// WARNING: This creates aliasing artifacts and violates audio engineering best practices!
+        /// </summary>
+        private string ApplySampleSkipFilter(string base64Audio)
+        {
+            if (SAMPLE_SKIP_PERCENTAGE <= 0 || SAMPLE_SKIP_PERCENTAGE >= 100)
+                return base64Audio; // No filtering
+
+            // Decode base64 to raw PCM16 bytes
+            var audioBytes = Convert.FromBase64String(base64Audio);
+
+            // Convert bytes to 16-bit samples (little-endian)
+            var sampleCount = audioBytes.Length / 2;
+            var samples = new short[sampleCount];
+            for (int i = 0; i < sampleCount; i++)
+            {
+                samples[i] = (short)(audioBytes[i * 2] | (audioBytes[i * 2 + 1] << 8));
+            }
+
+            // FIXED PATTERN: Skip every Nth sample
+            // Calculate skip interval: skip every Nth sample
+            // NOTE: Integer division! Only accurate when 100 % SAMPLE_SKIP_PERCENTAGE == 0
+            // Example: 20% → 100/20 = 5 → skip every 5th = 20% (exact)
+            //          30% → 100/30 = 3 → skip every 3rd = 33.3% (not 30%!)
+            var skipPercentage = SAMPLE_SKIP_PERCENTAGE; // Copy to variable to avoid compile-time constant division
+            var skipInterval = 100 / skipPercentage;
+
+            // Filter samples: keep all except every Nth
+            var filteredSamples = samples
+                .Where((sample, index) => (index + 1) % skipInterval != 0)
+                .ToArray();
+
+            var skippedCount = samples.Length - filteredSamples.Length;
+
+            // Log the first time this runs
+            if (_audioReceivedCount == 1)
+            {
+                var originalSize = audioBytes.Length;
+                var newSize = filteredSamples.Length * 2;
+                var actualSkipPercent = (1.0 - (double)filteredSamples.Length / samples.Length) * 100;
+                _logAction(LogLevel.Warn, $"🎤💀 SAMPLE SKIP FILTER ACTIVE (FIXED PATTERN): {SAMPLE_SKIP_PERCENTAGE}% target, {actualSkipPercent:F1}% actual skip, {originalSize} → {newSize} bytes (interval: every {skipInterval}th sample)");
+            }
+
+            // Convert filtered samples back to bytes
+            var filteredBytes = new byte[filteredSamples.Length * 2];
+            for (int i = 0; i < filteredSamples.Length; i++)
+            {
+                filteredBytes[i * 2] = (byte)(filteredSamples[i] & 0xFF);
+                filteredBytes[i * 2 + 1] = (byte)(filteredSamples[i] >> 8);
+            }
+
+            // Encode back to base64
+            return Convert.ToBase64String(filteredBytes);
+        }
+#endif
+
         private int _audioReceivedCount = 0;
 
         private async void OnAudioDataReceived(object sender, MicrophoneAudioReceivedEventArgs e)
@@ -506,7 +583,13 @@ namespace Ai.Tlbx.VoiceAssistant
                     {
                         _logAction(LogLevel.Info, $"[VA-AUDIO] Calling ProcessAudioAsync on provider");
                     }
-                    await _provider.ProcessAudioAsync(e.Base64EncodedPcm16Audio);
+
+#if DEBUG
+                    var audioToSend = ApplySampleSkipFilter(e.Base64EncodedPcm16Audio);
+#else
+                    var audioToSend = e.Base64EncodedPcm16Audio;
+#endif
+                    await _provider.ProcessAudioAsync(audioToSend);
                 }
                 else
                 {

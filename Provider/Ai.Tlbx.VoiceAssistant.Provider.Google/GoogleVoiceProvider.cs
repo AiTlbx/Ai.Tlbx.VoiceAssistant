@@ -36,6 +36,7 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.Google
         private GoogleVoiceSettings? _settings;
 
         private bool _setupComplete = false;
+        private bool _responseInterrupted = false;
         private readonly StringBuilder _currentTranscript = new();
         private readonly StringBuilder _currentUserTranscript = new();
         private readonly Dictionary<string, string> _pendingToolCalls = new();
@@ -529,8 +530,10 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.Google
                         }
                         else if (result.MessageType == WebSocketMessageType.Close)
                         {
-                            _logAction(LogLevel.Info, "[RX-LOOP] Close message received from server");
-                            OnStatusChanged?.Invoke("Connection closed by server");
+                            var closeStatus = result.CloseStatus?.ToString() ?? "Unknown";
+                            var closeDescription = result.CloseStatusDescription ?? "No description provided";
+                            _logAction(LogLevel.Info, $"[RX-LOOP] Close message received from server - Status: {closeStatus}, Description: {closeDescription}");
+                            OnStatusChanged?.Invoke($"Connection closed by server: {closeStatus} - {closeDescription}");
                             return;
                         }
                     }
@@ -590,7 +593,15 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.Google
                     return;
                 }
 
-                _logAction(LogLevel.Info, $"Received unhandled message type");
+                if (root.TryGetProperty("error", out var error))
+                {
+                    var errorMessage = error.ToString();
+                    _logAction(LogLevel.Error, $"[ERROR-FROM-SERVER] {errorMessage}");
+                    OnError?.Invoke($"Server error: {errorMessage}");
+                    return;
+                }
+
+                _logAction(LogLevel.Info, $"Received unhandled message type: {message}");
             }
             catch (Exception ex)
             {
@@ -628,7 +639,8 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.Google
 
             if (serverContent.TryGetProperty("interrupted", out var interrupted) && interrupted.GetBoolean())
             {
-                _logAction(LogLevel.Info, "Response interrupted by user");
+                _logAction(LogLevel.Info, "Response interrupted by user - discarding remaining audio from interrupted turn");
+                _responseInterrupted = true;
                 OnInterruptDetected?.Invoke();
                 _currentTranscript.Clear();
                 _currentUserTranscript.Clear();
@@ -652,10 +664,19 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.Google
                     {
                         if (part.TryGetProperty("text", out var text))
                         {
+                            var isThought = part.TryGetProperty("thought", out var thoughtProp) && thoughtProp.GetBoolean();
+
                             var textValue = text.GetString();
                             if (!string.IsNullOrEmpty(textValue))
                             {
-                                _currentTranscript.Append(textValue);
+                                if (isThought)
+                                {
+                                    _logAction(LogLevel.Info, $"[THOUGHT] {textValue}");
+                                }
+                                else
+                                {
+                                    _currentTranscript.Append(textValue);
+                                }
                             }
                         }
 
@@ -668,12 +689,19 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.Google
                                 var audioData = data.GetString();
                                 if (!string.IsNullOrEmpty(audioData))
                                 {
-                                    _audioRxCount++;
-                                    if (_audioRxCount % AUDIO_RX_LOG_INTERVAL == 1)
+                                    if (_responseInterrupted)
                                     {
-                                        _logAction(LogLevel.Info, $"[AUDIO-RX] Received {_audioRxCount} audio chunks from Google");
+                                        _logAction(LogLevel.Info, "[AUDIO-RX] Discarding audio chunk from interrupted response");
                                     }
-                                    OnAudioReceived?.Invoke(audioData);
+                                    else
+                                    {
+                                        _audioRxCount++;
+                                        if (_audioRxCount % AUDIO_RX_LOG_INTERVAL == 1)
+                                        {
+                                            _logAction(LogLevel.Info, $"[AUDIO-RX] Received {_audioRxCount} audio chunks from Google");
+                                        }
+                                        OnAudioReceived?.Invoke(audioData);
+                                    }
                                 }
                             }
                         }
@@ -683,6 +711,12 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.Google
 
             if (serverContent.TryGetProperty("turnComplete", out var turnComplete) && turnComplete.GetBoolean())
             {
+                if (_responseInterrupted)
+                {
+                    _logAction(LogLevel.Info, "Turn complete after interruption - ready for new response");
+                    _responseInterrupted = false;
+                }
+
                 if (_currentTranscript.Length > 0)
                 {
                     var transcriptText = _currentTranscript.ToString();
