@@ -28,7 +28,7 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.Google.Models
         /// <summary>
         /// The Google Gemini model to use for the conversation.
         /// </summary>
-        public GoogleModel Model { get; set; } = GoogleModel.Gemini25FlashNativeAudio;
+        public GoogleModel Model { get; set; } = GoogleModel.GeminiLive25FlashNativeAudio;
 
         /// <summary>
         /// The voice to use for AI responses.

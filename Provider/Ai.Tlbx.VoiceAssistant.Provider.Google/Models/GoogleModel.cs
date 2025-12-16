@@ -8,14 +8,21 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.Google.Models
     public enum GoogleModel
     {
         /// <summary>
-        /// Gemini 2.5 Flash with native audio support (recommended for quality).
+        /// Gemini Live 2.5 Flash with native audio support (recommended).
+        /// Combines live streaming with native audio for best quality and stability.
+        /// Model: gemini-live-2.5-flash-native-audio
+        /// </summary>
+        GeminiLive25FlashNativeAudio,
+
+        /// <summary>
+        /// Gemini 2.5 Flash with native audio support.
         /// Features the most natural and realistic-sounding speech with multilingual support.
         /// Model: gemini-2.5-flash-native-audio-preview-09-2025
         /// </summary>
         Gemini25FlashNativeAudio,
 
         /// <summary>
-        /// Gemini Live 2.5 Flash (recommended for production reliability).
+        /// Gemini Live 2.5 Flash.
         /// Uses half-cascade architecture for improved stability.
         /// Model: gemini-live-2.5-flash-preview
         /// </summary>
@@ -43,6 +50,7 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.Google.Models
         {
             return model switch
             {
+                GoogleModel.GeminiLive25FlashNativeAudio => "models/gemini-live-2.5-flash-native-audio",
                 GoogleModel.Gemini25FlashNativeAudio => "models/gemini-2.5-flash-native-audio-preview-09-2025",
                 GoogleModel.GeminiLive25Flash => "models/gemini-live-2.5-flash-preview",
                 GoogleModel.Gemini20FlashLive001 => "models/gemini-2.0-flash-live-001",
