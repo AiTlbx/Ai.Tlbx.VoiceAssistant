@@ -79,7 +79,7 @@ registerProcessor('audio-recorder-processor', AudioRecorderProcessor);
 
 // --- Playback Processor ---
 
-const BUFFER_SIZE = 1200000; // ~50s at 24kHz – prevents overflow on very long responses
+const BUFFER_SIZE = 4320000; // ~180s (3 min) at 24kHz – ~17MB, prevents overflow on very long responses
 const CROSSFADE_SAMPLES = 128; // Number of samples for crossfade (adjust as needed)
 const MIN_START_BUFFER = 4800; // ~200 ms @ 24 kHz – buffer before starting playback
 

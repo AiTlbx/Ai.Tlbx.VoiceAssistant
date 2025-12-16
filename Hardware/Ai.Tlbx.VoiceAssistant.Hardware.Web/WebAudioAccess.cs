@@ -3,6 +3,7 @@ using Ai.Tlbx.VoiceAssistant.Interfaces;
 using Ai.Tlbx.VoiceAssistant.Models;
 using Microsoft.JSInterop;
 using System.Text.Json;
+using System.Threading.Channels;
 
 namespace Ai.Tlbx.VoiceAssistant.Hardware.Web
 {
@@ -10,9 +11,12 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Web
     {
         private readonly IJSRuntime _jsRuntime;
         private IJSObjectReference? _audioModule;
-        private readonly Queue<string> _audioQueue = new Queue<string>();
-        private readonly object _audioLock = new object();
-        private bool _isPlaying = false;
+
+        // Channel-based audio queue - eliminates race conditions with Task.Run
+        private readonly Channel<(string Audio, int SampleRate)> _audioChannel;
+        private Task? _audioProcessorTask;
+        private CancellationTokenSource? _audioProcessorCts;
+
         private bool _isRecording = false;
         private bool _playbackSessionLogged = false;
         
@@ -38,6 +42,10 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Web
         public WebAudioAccess(IJSRuntime jsRuntime)
         {
             _jsRuntime = jsRuntime;
+
+            // Unbounded channel ensures we never block on write, single reader for ordering
+            _audioChannel = Channel.CreateUnbounded<(string, int)>(
+                new UnboundedChannelOptions { SingleReader = true });
         }
 
         /// <summary>
@@ -128,6 +136,9 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Web
                     // Set the diagnostic level now that the module is initialized
                     await _audioModule.InvokeVoidAsync("setDiagnosticLevel", (int)_diagnosticLevel);
                     Log(LogLevel.Info, $"Diagnostic level set to: {_diagnosticLevel}");
+
+                    // Start the audio processor task (single consumer for the channel)
+                    StartAudioProcessor();
                 }
                 catch (Exception initEx)
                 {
@@ -255,132 +266,70 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Web
         }
 
         public bool PlayAudio(string base64EncodedPcm16Audio, int sampleRate = 24000)
-        {   
+        {
             if (_audioModule == null)
-            {                
                 return false;
-            }
 
             if (string.IsNullOrEmpty(base64EncodedPcm16Audio))
-            {                
                 return false;
-            }
 
-            // Always enqueue the audio data
-            lock (_audioLock)
+            // Non-blocking write to channel - processor task handles playback
+            return _audioChannel.Writer.TryWrite((base64EncodedPcm16Audio, sampleRate));
+        }
+
+        private void StartAudioProcessor()
+        {
+            if (_audioProcessorTask != null)
+                return;
+
+            _audioProcessorCts = new CancellationTokenSource();
+            _audioProcessorTask = ProcessAudioChannelAsync(_audioProcessorCts.Token);
+            Log(LogLevel.Info, "Audio processor task started");
+        }
+
+        private async Task ProcessAudioChannelAsync(CancellationToken ct)
+        {
+            try
             {
-                // Store both the audio data and sample rate
-                _audioQueue.Enqueue($"{base64EncodedPcm16Audio}|{sampleRate}");
-
-                // If nothing is currently playing, start the audio processing
-                if (!_isPlaying)
+                await foreach (var (audio, sampleRate) in _audioChannel.Reader.ReadAllAsync(ct))
                 {
-                    _isPlaying = true;
                     if (!_playbackSessionLogged)
                     {
                         Log(LogLevel.Info, "Audio playback session started");
                         _playbackSessionLogged = true;
                     }
-                    // Start audio processing in background without awaiting
-                    _ = Task.Run(async () => 
+
+                    try
                     {
-                        try
+                        if (_audioModule != null)
                         {
-                            await ProcessAudioQueue();
+                            await _audioModule.InvokeVoidAsync("playAudio", audio, sampleRate);
                         }
-                        catch (Exception ex)
-                        {
-                            Log(LogLevel.Error, $"Error in background playback: {ex.Message}");
-                        }
-                        finally
-                        {
-                            lock (_audioLock)
-                            {
-                                _isPlaying = false;
-                                // Don't reset _playbackSessionLogged here - it should persist for the entire response
-                            }
-                        }
-                    });
+                    }
+                    catch (JSDisconnectedException)
+                    {
+                        // Circuit disconnected - drain remaining items and stop
+                        while (_audioChannel.Reader.TryRead(out _)) { }
+                        break;
+                    }
+                    catch (Exception ex)
+                    {
+                        Log(LogLevel.Error, $"Error playing audio chunk: {ex.Message}");
+                        AudioError?.Invoke(this, $"Error playing audio: {ex.Message}");
+                        // Continue processing next chunk
+                    }
                 }
             }
-
-            // Return immediately, audio will play asynchronously
-            return true;
-        }
-
-        private async Task PlayAudioChunk(string base64EncodedPcm16Audio, int sampleRate = 24000)
-        {
-            if (_audioModule == null) return;
-
-            try
+            catch (OperationCanceledException)
             {
-                // Reduced logging - don't spam for every chunk
-                await _audioModule.InvokeVoidAsync("playAudio", base64EncodedPcm16Audio, sampleRate);
-            }
-            catch (JSDisconnectedException jsEx)
-            {
-                // Circuit has disconnected
-                Log(LogLevel.Error, $"JSDisconnectedException: {jsEx.Message}");
-                lock (_audioLock)
-                {
-                    _audioQueue.Clear();
-                    _isPlaying = false;
-                }
-                throw; // Rethrow to inform caller
+                // Normal cancellation during shutdown
             }
             catch (Exception ex)
             {
-                Log(LogLevel.Error, $"Error in PlayAudioChunk: {ex.Message}");
-                Log(LogLevel.Error, $"Stack trace: {ex.StackTrace}");
-                throw;
+                Log(LogLevel.Error, $"Audio processor error: {ex.Message}");
             }
-        }
 
-        private async Task ProcessAudioQueue()
-        {
-            while (true)
-            {
-                string? nextChunk = null;
-
-                lock (_audioLock)
-                {
-                    if (_audioQueue.Count > 0)
-                    {
-                        nextChunk = _audioQueue.Dequeue();
-                    }
-                }
-
-                if (nextChunk == null)
-                {
-                    // Nothing to play right now, small delay then continue
-                    await Task.Delay(20);
-                    lock (_audioLock)
-                    {
-                        if (_audioQueue.Count == 0)
-                        {
-                            _isPlaying = false;
-                            // Reduced logging - don't spam playback finish messages
-                            return;
-                        }
-                    }
-                    continue;
-                }
-
-                // Parse the audio data and sample rate
-                string[] parts = nextChunk.Split('|');
-                string audioData = parts[0];
-                int sampleRate = parts.Length > 1 && int.TryParse(parts[1], out int rate) ? rate : 24000;
-
-                try
-                {
-                    await PlayAudioChunk(audioData, sampleRate);
-                }
-                catch (Exception ex)
-                {
-                    Log(LogLevel.Error, $"Error processing audio chunk: {ex.Message}");
-                    AudioError?.Invoke(this, $"Error playing audio: {ex.Message}");
-                }
-            }
+            Log(LogLevel.Info, "Audio processor task stopped");
         }
 
         public async Task<bool> StartRecordingAudio(MicrophoneAudioReceivedEventHandler audioDataReceivedHandler)
@@ -393,12 +342,9 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Web
                     Log(LogLevel.Warn, "Already recording, ignoring start request");
                     return true;
                 }
-                
+
                 // Reset playback session logging for new recording session
-                lock (_audioLock)
-                {
-                    _playbackSessionLogged = false;
-                }
+                _playbackSessionLogged = false;
                 
                 if (_audioModule == null)
                 {
@@ -555,47 +501,34 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Web
 
         public async Task ClearAudioQueue()
         {
-            if (_audioModule == null) return;
-
-            try
+            // Drain the channel
+            int queuedItems = 0;
+            while (_audioChannel.Reader.TryRead(out _))
             {
-                // Clear the queue first
-                int queuedItems;
-                lock (_audioLock)
-                {
-                    queuedItems = _audioQueue.Count;
-                    _audioQueue.Clear();
-                    _playbackSessionLogged = false; // Reset session logging
-                    if (queuedItems > 0)
-                        Log(LogLevel.Info, $"Cleared audio queue with {queuedItems} pending items");
-                }
-
-                // Stop any current audio playback
-                // Stop any current audio playback
-                await _audioModule.InvokeVoidAsync("stopAudioPlayback");
-
-                // Reset playing state
-                lock (_audioLock)
-                {
-                    _isPlaying = false;
-                }
+                queuedItems++;
             }
-            catch (JSDisconnectedException)
+
+            _playbackSessionLogged = false;
+
+            if (queuedItems > 0)
             {
-                // Handle circuit disconnection gracefully
-                lock (_audioLock)
-                {
-                    _audioQueue.Clear();
-                    _isPlaying = false;
-                }
+                Log(LogLevel.Info, $"Cleared audio queue with {queuedItems} pending items");
             }
-            catch (Exception)
+
+            // Stop any current audio playback in JS
+            if (_audioModule != null)
             {
-                // Still clear local state even if JS fails
-                lock (_audioLock)
+                try
                 {
-                    _audioQueue.Clear();
-                    _isPlaying = false;
+                    await _audioModule.InvokeVoidAsync("stopAudioPlayback");
+                }
+                catch (JSDisconnectedException)
+                {
+                    // Circuit disconnected - already cleared channel above
+                }
+                catch (Exception)
+                {
+                    // JS call failed but channel is cleared
                 }
             }
         }
@@ -760,10 +693,32 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Web
 
         async ValueTask IAsyncDisposable.DisposeAsync()
         {
+            // Stop the audio processor task
+            if (_audioProcessorCts != null)
+            {
+                _audioProcessorCts.Cancel();
+
+                if (_audioProcessorTask != null)
+                {
+                    try
+                    {
+                        await _audioProcessorTask;
+                    }
+                    catch
+                    {
+                        // Task cancellation expected
+                    }
+                }
+
+                _audioProcessorCts.Dispose();
+                _audioProcessorCts = null;
+                _audioProcessorTask = null;
+            }
+
             // Make sure recording is stopped
             if (_isRecording)
             {
-                try 
+                try
                 {
                     await StopRecordingAudio();
                 }
