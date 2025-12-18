@@ -4,6 +4,8 @@
 @using Ai.Tlbx.VoiceAssistant.Provider.OpenAi.Models
 @using Ai.Tlbx.VoiceAssistant.Provider.Google
 @using Ai.Tlbx.VoiceAssistant.Provider.Google.Models
+@using Ai.Tlbx.VoiceAssistant.Provider.XAi
+@using Ai.Tlbx.VoiceAssistant.Provider.XAi.Models
 @using Ai.Tlbx.VoiceAssistant.WebUi.Components
 @using Ai.Tlbx.VoiceAssistant.Demo.Web
 @using Ai.Tlbx.VoiceAssistant.Demo.Web.Services
@@ -151,7 +153,7 @@
     private bool showDebugMode = false;
 
     // Provider management
-    private List<string> availableProviders = new() { "OpenAI", "Google" };
+    private List<string> availableProviders = new() { "OpenAI", "Google", "xAI" };
     private string _selectedProviderString = "OpenAI";
     private string selectedProviderString
     {
@@ -221,7 +223,13 @@
         }
 
         // Create provider
-        var providerType = _selectedProviderString == "OpenAI" ? VoiceProviderType.OpenAI : VoiceProviderType.Google;
+        var providerType = _selectedProviderString switch
+        {
+            "OpenAI" => VoiceProviderType.OpenAI,
+            "Google" => VoiceProviderType.Google,
+            "xAI" => VoiceProviderType.XAi,
+            _ => VoiceProviderType.OpenAI
+        };
         var provider = ProviderFactory.CreateProvider(providerType);
 
         // Create new VoiceAssistant
@@ -253,6 +261,11 @@
         {
             availableVoices = Enum.GetValues<GoogleVoice>().Select(v => v.ToString()).ToList();
             _currentVoiceString = "Aoede";
+        }
+        else if (_selectedProviderString == "xAI")
+        {
+            availableVoices = Enum.GetValues<XaiVoice>().Select(v => v.ToString()).ToList();
+            _currentVoiceString = "Ara";
         }
     }
 
@@ -549,7 +562,7 @@
 
                 Log(LogLevel.Info, $"Starting OpenAI session with voice: {openAiVoice}");
             }
-            else // Google
+            else if (_selectedProviderString == "Google")
             {
                 if (!Enum.TryParse<GoogleVoice>(_currentVoiceString, out var googleVoice))
                 {
@@ -573,6 +586,25 @@
                 };
 
                 Log(LogLevel.Info, $"Starting Google session with voice: {googleVoice}");
+            }
+            else // xAI
+            {
+                if (!Enum.TryParse<XaiVoice>(_currentVoiceString, out var xaiVoice))
+                {
+                    xaiVoice = XaiVoice.Ara;
+                }
+
+                settings = new XaiVoiceSettings
+                {
+                    Instructions = instructions,
+                    Voice = xaiVoice,
+                    TalkingSpeed = currentVoiceSpeed,
+                    Tools = enabledTools.ToList(),
+                    EnableWebSearch = false,
+                    EnableXSearch = false
+                };
+
+                Log(LogLevel.Info, $"Starting xAI session with voice: {xaiVoice}");
             }
 
             // Start the session with the configured settings

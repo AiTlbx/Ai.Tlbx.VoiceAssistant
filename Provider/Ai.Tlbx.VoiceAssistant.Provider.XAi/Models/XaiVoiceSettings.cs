@@ -1,0 +1,70 @@
+using System.Collections.Generic;
+using Ai.Tlbx.VoiceAssistant.Interfaces;
+
+namespace Ai.Tlbx.VoiceAssistant.Provider.XAi.Models
+{
+    /// <summary>
+    /// xAI-specific voice assistant settings that control behavior and configuration.
+    /// </summary>
+    public class XaiVoiceSettings : IVoiceSettings
+    {
+        /// <summary>
+        /// Instructions for the AI assistant's behavior and personality.
+        /// </summary>
+        public string Instructions { get; set; } = "You are a helpful assistant.";
+
+        /// <summary>
+        /// List of tools available to the AI assistant.
+        /// </summary>
+        public List<IVoiceTool> Tools { get; set; } = new();
+
+        /// <summary>
+        /// The voice to use for AI responses.
+        /// Available: Ara (default), Rex, Sal, Eve, Leo
+        /// </summary>
+        public XaiVoice Voice { get; set; } = XaiVoice.Ara;
+
+        /// <summary>
+        /// The speed of the AI model's spoken response.
+        /// Note: xAI API doesn't currently support speed adjustment; this is for interface compatibility.
+        /// </summary>
+        public double TalkingSpeed { get; set; } = 1.0;
+
+        /// <summary>
+        /// Audio sample rate in Hz. Supported: 8000, 16000, 21050, 24000 (default), 32000, 44100, 48000.
+        /// </summary>
+        public int AudioSampleRate { get; set; } = 24000;
+
+        /// <summary>
+        /// Audio format type. Supported: "audio/pcm" (default), "audio/pcmu", "audio/pcma".
+        /// </summary>
+        public string AudioFormatType { get; set; } = "audio/pcm";
+
+        /// <summary>
+        /// Turn detection settings for conversation flow.
+        /// Set to null to disable server-side VAD.
+        /// </summary>
+        public XaiTurnDetection? TurnDetection { get; set; } = new();
+
+        /// <summary>
+        /// Enable xAI's built-in web search tool for real-time internet search.
+        /// </summary>
+        public bool EnableWebSearch { get; set; } = false;
+
+        /// <summary>
+        /// Enable xAI's built-in X (Twitter) search tool for posts, trends, and discussions.
+        /// </summary>
+        public bool EnableXSearch { get; set; } = false;
+    }
+
+    /// <summary>
+    /// Turn detection configuration for conversation management.
+    /// </summary>
+    public class XaiTurnDetection
+    {
+        /// <summary>
+        /// Type of turn detection. Use "server_vad" for server-side voice activity detection.
+        /// </summary>
+        public string Type { get; set; } = "server_vad";
+    }
+}
