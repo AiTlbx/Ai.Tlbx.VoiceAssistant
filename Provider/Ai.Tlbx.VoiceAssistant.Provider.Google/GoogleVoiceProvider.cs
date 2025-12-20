@@ -9,8 +9,10 @@ using System.Threading;
 using System.Threading.Tasks;
 using Ai.Tlbx.VoiceAssistant.Interfaces;
 using Ai.Tlbx.VoiceAssistant.Models;
+using Ai.Tlbx.VoiceAssistant.Reflection;
 using Ai.Tlbx.VoiceAssistant.Provider.Google.Models;
 using Ai.Tlbx.VoiceAssistant.Provider.Google.Protocol;
+using Ai.Tlbx.VoiceAssistant.Provider.Google.Translation;
 
 namespace Ai.Tlbx.VoiceAssistant.Provider.Google
 {
@@ -29,6 +31,7 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.Google
 
         private readonly string _apiKey;
         private readonly Action<LogLevel, string> _logAction;
+        private readonly GoogleToolTranslator _toolTranslator = new();
         private ClientWebSocket? _webSocket;
         private Task? _receiveTask;
         private CancellationTokenSource? _cts;
@@ -381,101 +384,23 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.Google
             if (_settings?.Tools == null || _settings.Tools.Count == 0)
                 return new List<Tool>();
 
-            var functionDeclarations = new List<FunctionDeclaration>();
-
-            foreach (var tool in _settings.Tools)
+            var functionDeclarations = _settings.Tools.Select(tool =>
             {
-                var declaration = new FunctionDeclaration
+                var schema = ToolSchemaInferrer.InferSchema(tool.ArgsType);
+                var translated = _toolTranslator.TranslateToolDefinition(tool, schema) as Dictionary<string, object>;
+
+                return new FunctionDeclaration
                 {
                     Name = tool.Name,
-                    Description = tool.Description
+                    Description = tool.Description,
+                    Parameters = translated?["parameters"]
                 };
-
-                if (tool is IVoiceToolWithSchema schemaTool)
-                {
-                    var schema = schemaTool.GetParameterSchema();
-                    declaration.Parameters = ConvertSchemaToGoogleFormat(schema);
-                }
-                else
-                {
-                    declaration.Parameters = new { type = "object", properties = new { } };
-                }
-
-                functionDeclarations.Add(declaration);
-            }
+            }).ToList();
 
             return new List<Tool>
             {
                 new Tool { FunctionDeclarations = functionDeclarations }
             };
-        }
-
-        private object ConvertSchemaToGoogleFormat(ToolParameterSchema schema)
-        {
-            var result = new Dictionary<string, object>
-            {
-                ["type"] = schema.Type
-            };
-
-            if (schema.Properties != null && schema.Properties.Count > 0)
-            {
-                result["properties"] = schema.Properties.ToDictionary(
-                    kvp => kvp.Key,
-                    kvp => ConvertPropertyToGoogleFormat(kvp.Value)
-                );
-            }
-
-            if (schema.Required != null && schema.Required.Count > 0)
-            {
-                result["required"] = schema.Required;
-            }
-
-            return result;
-        }
-
-        private object ConvertPropertyToGoogleFormat(ParameterProperty property)
-        {
-            var result = new Dictionary<string, object>
-            {
-                ["type"] = property.Type
-            };
-
-            if (!string.IsNullOrEmpty(property.Description))
-                result["description"] = property.Description;
-
-            if (property.Enum != null && property.Enum.Count > 0)
-                result["enum"] = property.Enum;
-
-            if (property.Default != null)
-                result["default"] = property.Default;
-
-            if (property.Properties != null && property.Properties.Count > 0)
-            {
-                result["properties"] = property.Properties.ToDictionary(
-                    kvp => kvp.Key,
-                    kvp => ConvertPropertyToGoogleFormat(kvp.Value)
-                );
-            }
-
-            if (property.Items != null)
-                result["items"] = ConvertPropertyToGoogleFormat(property.Items);
-
-            if (property.Minimum.HasValue)
-                result["minimum"] = property.Minimum.Value;
-
-            if (property.Maximum.HasValue)
-                result["maximum"] = property.Maximum.Value;
-
-            if (property.MinLength.HasValue)
-                result["minLength"] = property.MinLength.Value;
-
-            if (property.MaxLength.HasValue)
-                result["maxLength"] = property.MaxLength.Value;
-
-            if (!string.IsNullOrEmpty(property.Pattern))
-                result["pattern"] = property.Pattern;
-
-            return result;
         }
 
         private async Task SendMessageAsync<T>(T message)
@@ -620,6 +545,10 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.Google
                     var textValue = inputText.GetString();
                     if (!string.IsNullOrEmpty(textValue))
                     {
+                        if (_currentUserTranscript.Length == 0)
+                        {
+                            _logAction(LogLevel.Info, "[VAD] Speech detected - starting user transcription");
+                        }
                         _currentUserTranscript.Append(textValue);
                     }
                 }
@@ -711,9 +640,11 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.Google
 
             if (serverContent.TryGetProperty("turnComplete", out var turnComplete) && turnComplete.GetBoolean())
             {
+                _logAction(LogLevel.Info, "[TURN] Model turn complete - ready for user input");
+
                 if (_responseInterrupted)
                 {
-                    _logAction(LogLevel.Info, "Turn complete after interruption - ready for new response");
+                    _logAction(LogLevel.Info, "[TURN] Turn complete after interruption - ready for new response");
                     _responseInterrupted = false;
                 }
 
@@ -733,6 +664,15 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.Google
         {
             if (!toolCall.TryGetProperty("functionCalls", out var functionCalls))
                 return;
+
+            // Flush user transcript BEFORE tool call messages to maintain correct order
+            if (_currentUserTranscript.Length > 0)
+            {
+                var userMessage = _currentUserTranscript.ToString();
+                _logAction(LogLevel.Info, $"[USER-COMPLETE] {userMessage}");
+                OnMessageReceived?.Invoke(ChatMessage.CreateUserMessage(userMessage));
+                _currentUserTranscript.Clear();
+            }
 
             var responses = new List<FunctionResponse>();
 

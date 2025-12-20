@@ -1,72 +1,34 @@
 using System;
-using System.Collections.Generic;
+using System.ComponentModel;
 using System.Threading.Tasks;
-using Ai.Tlbx.VoiceAssistant.Models;
 
 namespace Ai.Tlbx.VoiceAssistant.BuiltInTools
 {
-    /// <summary>
-    /// Example weather tool demonstrating parameter schema support.
-    /// </summary>
-    public class WeatherTool : ValidatedVoiceToolBase<WeatherTool.WeatherArgs>
+    public enum TemperatureUnit
     {
-        /// <summary>
-        /// Arguments for the weather tool.
-        /// </summary>
-        public class WeatherArgs
-        {
-            /// <summary>
-            /// The location to get weather for.
-            /// </summary>
-            public string Location { get; set; } = string.Empty;
+        Celsius,
+        Fahrenheit
+    }
 
-            /// <summary>
-            /// The temperature unit.
-            /// </summary>
-            public string Unit { get; set; } = "celsius";
-        }
+    [Description("Get the current weather for a specific location")]
+    public class WeatherTool : VoiceToolBase<WeatherTool.Args>
+    {
+        public record Args(
+            [property: Description("The city and state/country, e.g., 'San Francisco, CA' or 'London, UK'")] string Location,
+            [property: Description("The temperature unit to use")] TemperatureUnit Unit = TemperatureUnit.Celsius
+        );
 
-        /// <inheritdoc/>
         public override string Name => "get_weather";
 
-        /// <inheritdoc/>
-        public override string Description => "Get the current weather for a specific location";
-
-        /// <inheritdoc/>
-        public override ToolParameterSchema GetParameterSchema() => new()
+        public override Task<string> ExecuteAsync(Args args)
         {
-            Properties = new Dictionary<string, ParameterProperty>
-            {
-                ["location"] = new ParameterProperty
-                {
-                    Type = "string",
-                    Description = "The city and state/country, e.g., 'San Francisco, CA' or 'London, UK'",
-                    MinLength = 1
-                },
-                ["unit"] = new ParameterProperty
-                {
-                    Type = "string",
-                    Description = "The temperature unit to use",
-                    Enum = new List<string> { "celsius", "fahrenheit" },
-                    Default = "celsius"
-                }
-            },
-            Required = new List<string> { "location" }
-        };
-
-        /// <inheritdoc/>
-        protected override Task<string> ExecuteValidatedAsync(WeatherArgs args)
-        {
-            // This is a mock implementation
-            // In a real implementation, you would call a weather API
-            
             var random = new Random();
             var temperature = random.Next(10, 30);
             var conditions = new[] { "sunny", "cloudy", "rainy", "partly cloudy" };
             var condition = conditions[random.Next(conditions.Length)];
 
-            var unitSymbol = args.Unit == "fahrenheit" ? "°F" : "°C";
-            if (args.Unit == "fahrenheit")
+            var unitSymbol = args.Unit == TemperatureUnit.Fahrenheit ? "°F" : "°C";
+            if (args.Unit == TemperatureUnit.Fahrenheit)
             {
                 temperature = (int)(temperature * 9.0 / 5.0 + 32);
             }

@@ -38,6 +38,7 @@ public class Program
         builder.Services.AddTransient<IVoiceTool, TimeTool>();
         builder.Services.AddTransient<IVoiceTool, WeatherTool>();
         builder.Services.AddTransient<IVoiceTool, CalculatorTool>();
+        builder.Services.AddTransient<IVoiceTool, BusinessPlanTool>();
         
         builder.Services.AddSignalR(options =>
         {

@@ -11,7 +11,9 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using Ai.Tlbx.VoiceAssistant.Interfaces;
 using Ai.Tlbx.VoiceAssistant.Models;
+using Ai.Tlbx.VoiceAssistant.Reflection;
 using Ai.Tlbx.VoiceAssistant.Provider.OpenAi.Models;
+using Ai.Tlbx.VoiceAssistant.Provider.OpenAi.Translation;
 using System.Text.Json.Serialization;
 
 namespace Ai.Tlbx.VoiceAssistant.Provider.OpenAi
@@ -28,6 +30,7 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.OpenAi
 
         private readonly string _apiKey;
         private readonly Action<LogLevel, string> _logAction;
+        private readonly OpenAiToolTranslator _toolTranslator = new();
         private ClientWebSocket? _webSocket;
         private Task? _receiveTask;
         private CancellationTokenSource? _cts;
@@ -407,13 +410,9 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.OpenAi
                     ? new { type = "retention_ratio", retention_ratio = _settings.RetentionRatio }
                     : new { type = "disabled" },
                 ["tool_choice"] = "auto",
-                ["tools"] = _settings.Tools.Select(tool => new
-                {
-                    type = "function",
-                    name = tool.Name,
-                    description = tool.Description,
-                    parameters = GetToolParameters(tool)
-                }).ToArray(),
+                ["tools"] = _settings.Tools.Select(tool =>
+                    _toolTranslator.TranslateToolDefinition(tool, ToolSchemaInferrer.InferSchema(tool.ArgsType))
+                ).ToArray(),
                 ["audio"] = new
                 {
                     input = new
@@ -630,72 +629,106 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.OpenAi
             {
                 var argsDelta = delta.GetString() ?? "";
                 _currentFunctionArgs.Append(argsDelta);
-                
-                if (root.TryGetProperty("name", out var nameElement))
+            }
+
+            if (root.TryGetProperty("name", out var nameElement))
+            {
+                var name = nameElement.GetString() ?? "";
+                if (!string.IsNullOrEmpty(name))
                 {
-                    _currentFunctionName = nameElement.GetString() ?? "";
+                    _currentFunctionName = name;
+                    _logAction(LogLevel.Info, $"[Tool] Function call started: {_currentFunctionName}");
                 }
-                
-                if (root.TryGetProperty("call_id", out var callIdElement))
+            }
+
+            if (root.TryGetProperty("call_id", out var callIdElement))
+            {
+                var callId = callIdElement.GetString() ?? "";
+                if (!string.IsNullOrEmpty(callId))
                 {
-                    _currentCallId = callIdElement.GetString() ?? "";
+                    _currentCallId = callId;
                 }
             }
         }
         
         private async Task HandleFunctionCallDone(JsonElement root)
         {
-            if (root.TryGetProperty("name", out var nameElement) &&
-                root.TryGetProperty("call_id", out var callIdElement))
+            // Try to get from event first, fall back to accumulated values
+            var functionName = root.TryGetProperty("name", out var nameElement)
+                ? (nameElement.GetString() ?? _currentFunctionName)
+                : _currentFunctionName;
+            var callId = root.TryGetProperty("call_id", out var callIdElement)
+                ? (callIdElement.GetString() ?? _currentCallId)
+                : _currentCallId;
+            var argumentsJson = _currentFunctionArgs.ToString();
+
+            _logAction(LogLevel.Info, $"[Tool] Function call complete: {functionName}");
+            _logAction(LogLevel.Info, $"[Tool] Call ID: {callId}");
+            _logAction(LogLevel.Info, $"[Tool] Arguments: {argumentsJson}");
+
+            if (string.IsNullOrEmpty(functionName))
             {
-                var functionName = nameElement.GetString() ?? _currentFunctionName;
-                var callId = callIdElement.GetString() ?? _currentCallId;
-                var argumentsJson = _currentFunctionArgs.ToString();
-                
-                _logAction(LogLevel.Info, $"Function call complete: {functionName} (ID: {callId})");
-                
-                // Find and execute the tool
-                var tool = _settings?.Tools.FirstOrDefault(t => t.Name == functionName);
-                
-                if (tool != null)
-                {
-                    try
-                    {
-                        _logAction(LogLevel.Info, $"Executing tool: {functionName}");
-                        var result = await tool.ExecuteAsync(argumentsJson);
-                        
-                        // Send the tool result back to OpenAI
-                        await SendToolResultAsync(callId, result);
-                        
-                        // Add tool call message to chat history
-                        var formattedArgs = FormatToolArguments(argumentsJson);
-                        var toolCallMessage = ChatMessage.CreateAssistantMessage($"Calling tool: {functionName}\nArguments: {formattedArgs}");
-                        OnMessageReceived?.Invoke(toolCallMessage);
-                        
-                        // Add tool response message to chat history
-                        var toolResponseMessage = ChatMessage.CreateToolMessage(functionName, result, callId);
-                        OnMessageReceived?.Invoke(toolResponseMessage);
-                    }
-                    catch (Exception ex)
-                    {
-                        _logAction(LogLevel.Error, $"Error executing tool {functionName}: {ex.Message}");
-                        await SendToolResultAsync(callId, $"Error: {ex.Message}");
-                    }
-                }
-                else
-                {
-                    _logAction(LogLevel.Warn, $"Tool not found: {functionName}");
-                    await SendToolResultAsync(callId, $"Tool not found: {functionName}");
-                }
-                
-                // Clear the buffers
+                _logAction(LogLevel.Error, "[Tool] ERROR: Function name is empty");
                 _currentFunctionArgs.Clear();
                 _currentFunctionName = "";
                 _currentCallId = "";
+                return;
             }
+
+            if (string.IsNullOrEmpty(callId))
+            {
+                _logAction(LogLevel.Error, "[Tool] ERROR: Call ID is empty");
+                _currentFunctionArgs.Clear();
+                _currentFunctionName = "";
+                _currentCallId = "";
+                return;
+            }
+
+            // Find and execute the tool
+            var tool = _settings?.Tools.FirstOrDefault(t => t.Name == functionName);
+            var registeredTools = _settings?.Tools.Select(t => t.Name).ToList() ?? new List<string>();
+            _logAction(LogLevel.Info, $"[Tool] Registered tools: [{string.Join(", ", registeredTools)}]");
+
+            if (tool != null)
+            {
+                try
+                {
+                    _logAction(LogLevel.Info, $"[Tool] Executing tool: {functionName}");
+                    var result = await tool.ExecuteAsync(argumentsJson);
+                    _logAction(LogLevel.Info, $"[Tool] Execution result: {result}");
+
+                    // Send the tool result back to OpenAI
+                    await SendToolResultAsync(callId, functionName, result);
+
+                    // Add tool call message to chat history
+                    var formattedArgs = FormatToolArguments(argumentsJson);
+                    var toolCallMessage = ChatMessage.CreateAssistantMessage($"Calling tool: {functionName}\nArguments: {formattedArgs}");
+                    OnMessageReceived?.Invoke(toolCallMessage);
+
+                    // Add tool response message to chat history
+                    var toolResponseMessage = ChatMessage.CreateToolMessage(functionName, result, callId);
+                    OnMessageReceived?.Invoke(toolResponseMessage);
+                }
+                catch (Exception ex)
+                {
+                    _logAction(LogLevel.Error, $"[Tool] ERROR executing {functionName}: {ex.Message}");
+                    _logAction(LogLevel.Error, $"[Tool] Stack trace: {ex.StackTrace}");
+                    await SendToolResultAsync(callId, functionName, $"Error: {ex.Message}");
+                }
+            }
+            else
+            {
+                _logAction(LogLevel.Warn, $"[Tool] Tool not found: {functionName}");
+                await SendToolResultAsync(callId, functionName, $"Tool not found: {functionName}");
+            }
+
+            // Clear the buffers
+            _currentFunctionArgs.Clear();
+            _currentFunctionName = "";
+            _currentCallId = "";
         }
         
-        private async Task SendToolResultAsync(string callId, string result)
+        private async Task SendToolResultAsync(string callId, string functionName, string result)
         {
             var toolResponse = new
             {
@@ -707,18 +740,20 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.OpenAi
                     output = result
                 }
             };
-            
-            await SendMessageAsync(JsonSerializer.Serialize(toolResponse));
-            _logAction(LogLevel.Info, $"Tool result sent for call {callId}");
-            
+
+            var toolResponseJson = JsonSerializer.Serialize(toolResponse);
+            _logAction(LogLevel.Info, $"[Tool] Sending tool result JSON: {toolResponseJson}");
+
+            await SendMessageAsync(toolResponseJson);
+            _logAction(LogLevel.Info, $"[Tool] Tool result sent for {functionName} (call_id: {callId})");
+
             // Request a new response from the AI
-            var responseCreate = new
-            {
-                type = "response.create"
-            };
-            
-            await SendMessageAsync(JsonSerializer.Serialize(responseCreate));
-            _logAction(LogLevel.Info, "Requested AI response after tool execution");
+            var responseCreate = new { type = "response.create" };
+            var responseCreateJson = JsonSerializer.Serialize(responseCreate);
+            _logAction(LogLevel.Info, $"[Tool] Sending response.create: {responseCreateJson}");
+
+            await SendMessageAsync(responseCreateJson);
+            _logAction(LogLevel.Info, "[Tool] Requested AI response after tool execution");
         }
 
         private void HandleError(JsonElement root)
@@ -835,27 +870,6 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.OpenAi
             }
         }
 
-        private object GetToolParameters(IVoiceTool tool)
-        {
-            if (tool is IVoiceToolWithSchema schemaTools)
-            {
-                var schema = schemaTools.GetParameterSchema();
-                return new
-                {
-                    type = schema.Type,
-                    properties = schema.Properties?.ToDictionary(
-                        kvp => kvp.Key,
-                        kvp => SerializeParameterProperty(kvp.Value)
-                    ) ?? new Dictionary<string, object>(),
-                    required = schema.Required ?? new List<string>(),
-                    additionalProperties = schema.AdditionalProperties
-                };
-            }
-            
-            // Fallback for tools without schema (maintains backward compatibility)
-            return new { type = "object", properties = new { } };
-        }
-        
         private string FormatToolArguments(string argumentsJson)
         {
             try
@@ -884,51 +898,6 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.OpenAi
             {
                 return argumentsJson;
             }
-        }
-
-        private object SerializeParameterProperty(ParameterProperty property)
-        {
-            var result = new Dictionary<string, object>
-            {
-                ["type"] = property.Type
-            };
-
-            if (!string.IsNullOrEmpty(property.Description))
-                result["description"] = property.Description;
-
-            if (property.Enum != null && property.Enum.Count > 0)
-                result["enum"] = property.Enum;
-
-            if (property.Default != null)
-                result["default"] = property.Default;
-
-            if (property.Properties != null && property.Properties.Count > 0)
-            {
-                result["properties"] = property.Properties.ToDictionary(
-                    kvp => kvp.Key,
-                    kvp => SerializeParameterProperty(kvp.Value)
-                );
-            }
-
-            if (property.Items != null)
-                result["items"] = SerializeParameterProperty(property.Items);
-
-            if (property.Minimum.HasValue)
-                result["minimum"] = property.Minimum.Value;
-
-            if (property.Maximum.HasValue)
-                result["maximum"] = property.Maximum.Value;
-
-            if (property.MinLength.HasValue)
-                result["minLength"] = property.MinLength.Value;
-
-            if (property.MaxLength.HasValue)
-                result["maxLength"] = property.MaxLength.Value;
-
-            if (!string.IsNullOrEmpty(property.Pattern))
-                result["pattern"] = property.Pattern;
-
-            return result;
         }
 
         /// <summary>

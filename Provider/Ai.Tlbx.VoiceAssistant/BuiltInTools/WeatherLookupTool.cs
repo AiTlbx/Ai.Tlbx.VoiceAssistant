@@ -1,121 +1,57 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
+using System.ComponentModel;
 using System.Threading.Tasks;
-using Ai.Tlbx.VoiceAssistant.Models;
 
 namespace Ai.Tlbx.VoiceAssistant.BuiltInTools
 {
-    /// <summary>
-    /// Weather lookup tool that demonstrates parameter schema features with place and time inputs.
-    /// Returns a simulated weather report with realistic variations.
-    /// </summary>
-    public class WeatherLookupTool : ValidatedVoiceToolBase<WeatherLookupTool.WeatherLookupArgs>
+    public enum WeatherUnit
     {
-        /// <summary>
-        /// Arguments for the weather lookup tool.
-        /// </summary>
-        public class WeatherLookupArgs
-        {
-            /// <summary>
-            /// The location to get weather for.
-            /// </summary>
-            public string Place { get; set; } = string.Empty;
+        Celsius,
+        Fahrenheit,
+        Kelvin
+    }
 
-            /// <summary>
-            /// The date/time for the weather forecast.
-            /// </summary>
-            public string Time { get; set; } = "now";
-
-            /// <summary>
-            /// The temperature unit.
-            /// </summary>
-            public string Unit { get; set; } = "celsius";
-
-            /// <summary>
-            /// Whether to include detailed information.
-            /// </summary>
-            public bool Detailed { get; set; } = false;
-        }
+    [Description("Look up weather for a specific place and time with detailed forecast information")]
+    public class WeatherLookupTool : VoiceToolBase<WeatherLookupTool.Args>
+    {
+        public record Args(
+            [property: Description("The location to get weather for (city, address, or coordinates)")] string Place,
+            [property: Description("When to get weather for: 'now', 'today', 'tomorrow', or specific date/time (e.g., '2024-12-25 15:00')")] string? Time = "now",
+            [property: Description("Temperature unit preference")] WeatherUnit Unit = WeatherUnit.Celsius,
+            [property: Description("Include detailed forecast information")] bool Detailed = false
+        );
 
         private readonly Random _random = new();
-        private readonly string[] _conditions = 
+        private readonly string[] _conditions =
         {
-            "clear", "partly cloudy", "mostly cloudy", "overcast", 
+            "clear", "partly cloudy", "mostly cloudy", "overcast",
             "light rain", "moderate rain", "heavy rain", "thunderstorms",
             "light snow", "moderate snow", "foggy", "windy"
         };
 
         private readonly string[] _windDirections = { "N", "NE", "E", "SE", "S", "SW", "W", "NW" };
 
-        /// <inheritdoc/>
         public override string Name => "weather_lookup";
 
-        /// <inheritdoc/>
-        public override string Description => "Look up weather for a specific place and time with detailed forecast information";
-
-        /// <inheritdoc/>
-        public override ToolParameterSchema GetParameterSchema() => new()
+        public override Task<string> ExecuteAsync(Args args)
         {
-            Properties = new Dictionary<string, ParameterProperty>
-            {
-                ["place"] = new ParameterProperty
-                {
-                    Type = "string",
-                    Description = "The location to get weather for (city, address, or coordinates)",
-                    MinLength = 1
-                },
-                ["time"] = new ParameterProperty
-                {
-                    Type = "string",
-                    Description = "When to get weather for: 'now', 'today', 'tomorrow', or specific date/time (e.g., '2024-12-25 15:00')",
-                    Default = "now"
-                },
-                ["unit"] = new ParameterProperty
-                {
-                    Type = "string",
-                    Description = "Temperature unit preference",
-                    Enum = new List<string> { "celsius", "fahrenheit", "kelvin" },
-                    Default = "celsius"
-                },
-                ["detailed"] = new ParameterProperty
-                {
-                    Type = "boolean",
-                    Description = "Include detailed forecast information",
-                    Default = false
-                }
-            },
-            Required = new List<string> { "place" }
-        };
-
-        /// <inheritdoc/>
-        protected override Task<string> ExecuteValidatedAsync(WeatherLookupArgs args)
-        {
-            // Parse the time
-            var requestedTime = ParseTime(args.Time);
-            var isNow = args.Time.ToLowerInvariant() == "now";
+            var time = args.Time ?? "now";
+            var requestedTime = ParseTime(time);
+            var isNow = time.ToLowerInvariant() == "now";
             var isFuture = requestedTime > DateTime.Now;
-            
-            // Generate base temperature based on time of day and season
+
             var baseTemp = GenerateBaseTemperature(requestedTime);
-            
-            // Add some variance
             var temperature = baseTemp + _random.Next(-5, 6);
-            
-            // Select weather condition with some logic
             var condition = SelectWeatherCondition(temperature, requestedTime);
-            
-            // Convert temperature to requested unit
             var (convertedTemp, unitSymbol) = ConvertTemperature(temperature, args.Unit);
-            
-            // Generate other weather data
+
             var humidity = GenerateHumidity(condition);
             var windSpeed = _random.Next(5, 30);
             var windDirection = _windDirections[_random.Next(_windDirections.Length)];
             var pressure = _random.Next(990, 1030);
             var visibility = condition.Contains("fog") ? _random.Next(1, 5) : _random.Next(10, 20);
-            
-            // Build response
+
             var response = new Dictionary<string, object>
             {
                 ["place"] = args.Place,
@@ -139,8 +75,7 @@ namespace Ai.Tlbx.VoiceAssistant.BuiltInTools
                 response["precipitation_chance_percent"] = condition.Contains("rain") || condition.Contains("snow") ? _random.Next(60, 95) : _random.Next(0, 20);
                 response["sunrise"] = "06:45";
                 response["sunset"] = "18:30";
-                
-                // Add hourly forecast if detailed
+
                 if (isFuture)
                 {
                     var hourly = new List<object>();
@@ -177,23 +112,21 @@ namespace Ai.Tlbx.VoiceAssistant.BuiltInTools
 
         private int GenerateBaseTemperature(DateTime time)
         {
-            // Base temperature by month (Northern Hemisphere)
             var monthTemp = time.Month switch
             {
-                12 or 1 or 2 => 5,   // Winter
-                3 or 4 or 5 => 15,   // Spring
-                6 or 7 or 8 => 25,   // Summer
-                9 or 10 or 11 => 15, // Fall
+                12 or 1 or 2 => 5,
+                3 or 4 or 5 => 15,
+                6 or 7 or 8 => 25,
+                9 or 10 or 11 => 15,
                 _ => 20
             };
 
-            // Adjust by time of day
             var hourAdjustment = time.Hour switch
             {
-                >= 0 and < 6 => -5,   // Night
-                >= 6 and < 12 => 0,   // Morning
-                >= 12 and < 18 => 5,  // Afternoon
-                _ => -2               // Evening
+                >= 0 and < 6 => -5,
+                >= 6 and < 12 => 0,
+                >= 12 and < 18 => 5,
+                _ => -2
             };
 
             return monthTemp + hourAdjustment + _random.Next(-3, 4);
@@ -201,18 +134,15 @@ namespace Ai.Tlbx.VoiceAssistant.BuiltInTools
 
         private string SelectWeatherCondition(int temperature, DateTime time)
         {
-            // Snow only when cold
             if (temperature < 2 && _random.Next(100) < 30)
-                return _conditions[_random.Next(8, 10)]; // Snow conditions
+                return _conditions[_random.Next(8, 10)];
 
-            // Rain more likely in spring/fall
             if ((time.Month >= 3 && time.Month <= 5) || (time.Month >= 9 && time.Month <= 11))
             {
                 if (_random.Next(100) < 40)
-                    return _conditions[_random.Next(4, 8)]; // Rain conditions
+                    return _conditions[_random.Next(4, 8)];
             }
 
-            // Otherwise random from non-precipitation conditions
             return _conditions[_random.Next(0, 4)];
         }
 
@@ -227,22 +157,22 @@ namespace Ai.Tlbx.VoiceAssistant.BuiltInTools
             return _random.Next(40, 70);
         }
 
-        private (double temperature, string unit) ConvertTemperature(double celsius, string targetUnit)
+        private (double temperature, string unit) ConvertTemperature(double celsius, WeatherUnit targetUnit)
         {
-            return targetUnit.ToLowerInvariant() switch
+            return targetUnit switch
             {
-                "fahrenheit" => (Math.Round(celsius * 9.0 / 5.0 + 32, 1), "°F"),
-                "kelvin" => (Math.Round(celsius + 273.15, 1), "K"),
+                WeatherUnit.Fahrenheit => (Math.Round(celsius * 9.0 / 5.0 + 32, 1), "°F"),
+                WeatherUnit.Kelvin => (Math.Round(celsius + 273.15, 1), "K"),
                 _ => (Math.Round(celsius, 1), "°C")
             };
         }
 
         private string GenerateDescription(string place, DateTime time, double temperature, string unit, string condition)
         {
-            var timeDesc = time.Date == DateTime.Today ? "Currently" : 
-                          time.Date == DateTime.Today.AddDays(1) ? "Tomorrow" : 
+            var timeDesc = time.Date == DateTime.Today ? "Currently" :
+                          time.Date == DateTime.Today.AddDays(1) ? "Tomorrow" :
                           $"On {time:MMMM d}";
-            
+
             var tempDesc = temperature switch
             {
                 < 0 => "freezing",
@@ -256,7 +186,7 @@ namespace Ai.Tlbx.VoiceAssistant.BuiltInTools
                    $"It's {tempDesc} with {GetConditionDescription(condition)}.";
         }
 
-        private string GetConditionDescription(string condition)
+        private static string GetConditionDescription(string condition)
         {
             return condition switch
             {

@@ -1,330 +1,233 @@
 # AI Voice Assistant Toolkit
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![.NET](https://img.shields.io/badge/.NET-9.0-blue.svg)](https://dotnet.microsoft.com/download)
+**Real-time voice conversations with AI in .NET — OpenAI, Google Gemini, and xAI Grok in one unified API.**
 
-[![NuGet Core](https://img.shields.io/nuget/v/Ai.Tlbx.VoiceAssistant.svg?label=Core)](https://www.nuget.org/packages/Ai.Tlbx.VoiceAssistant/)
-[![NuGet OpenAI](https://img.shields.io/nuget/v/Ai.Tlbx.VoiceAssistant.Provider.OpenAi.svg?label=OpenAI%20Provider)](https://www.nuget.org/packages/Ai.Tlbx.VoiceAssistant.Provider.OpenAi/)
-[![NuGet Google](https://img.shields.io/nuget/v/Ai.Tlbx.VoiceAssistant.Provider.Google.svg?label=Google%20Provider)](https://www.nuget.org/packages/Ai.Tlbx.VoiceAssistant.Provider.Google/)
-[![NuGet Windows](https://img.shields.io/nuget/v/Ai.Tlbx.VoiceAssistant.Hardware.Windows.svg?label=Windows%20Hardware)](https://www.nuget.org/packages/Ai.Tlbx.VoiceAssistant.Hardware.Windows/)
-[![NuGet Linux](https://img.shields.io/nuget/v/Ai.Tlbx.VoiceAssistant.Hardware.Linux.svg?label=Linux%20Hardware)](https://www.nuget.org/packages/Ai.Tlbx.VoiceAssistant.Hardware.Linux/)
-[![NuGet Web](https://img.shields.io/nuget/v/Ai.Tlbx.VoiceAssistant.Hardware.Web.svg?label=Web%20Hardware)](https://www.nuget.org/packages/Ai.Tlbx.VoiceAssistant.Hardware.Web/)
-[![NuGet WebUI](https://img.shields.io/nuget/v/Ai.Tlbx.VoiceAssistant.WebUi.svg?label=WebUI)](https://www.nuget.org/packages/Ai.Tlbx.VoiceAssistant.WebUi/)
+[![NuGet](https://img.shields.io/nuget/v/Ai.Tlbx.VoiceAssistant.svg?label=nuget&color=blue)](https://www.nuget.org/packages/Ai.Tlbx.VoiceAssistant/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![.NET 9 | 10](https://img.shields.io/badge/.NET-9.0_|_10.0-purple.svg)](https://dotnet.microsoft.com/)
 
-A simple .NET 9 toolkit for building real-time AI voice assistants. Talk to AI, get responses back with voice. Works on Windows, Linux, and Web.
+---
 
-## Install
+## Quick Start (Blazor Server)
 
+**1. Install packages:**
 ```bash
-# Core package (always needed)
 dotnet add package Ai.Tlbx.VoiceAssistant
-
-# AI provider (pick one or both)
-dotnet add package Ai.Tlbx.VoiceAssistant.Provider.OpenAi   # OpenAI Realtime API
-dotnet add package Ai.Tlbx.VoiceAssistant.Provider.Google   # Google Gemini Live API
-
-# Platform (pick one)
-dotnet add package Ai.Tlbx.VoiceAssistant.Hardware.Windows  # Windows
-dotnet add package Ai.Tlbx.VoiceAssistant.Hardware.Linux    # Linux
-dotnet add package Ai.Tlbx.VoiceAssistant.Hardware.Web      # Blazor
-
-# Optional UI components for web
-dotnet add package Ai.Tlbx.VoiceAssistant.WebUi
+dotnet add package Ai.Tlbx.VoiceAssistant.Provider.OpenAi   # and/or .Google, .XAi
+dotnet add package Ai.Tlbx.VoiceAssistant.Hardware.Web
 ```
 
-## Simple Examples
-
-### Console App (Windows/Linux)
-
-```csharp
-using Ai.Tlbx.VoiceAssistant;
-using Ai.Tlbx.VoiceAssistant.Provider.OpenAi;
-using Ai.Tlbx.VoiceAssistant.Provider.OpenAi.Models;
-using Ai.Tlbx.VoiceAssistant.Hardware.Windows; // or .Hardware.Linux
-using Microsoft.Extensions.DependencyInjection;
-
-var services = new ServiceCollection();
-services.AddVoiceAssistant()
-    .WithOpenAi(apiKey: "your-openai-key")
-    .WithHardware<WindowsAudioDevice>(); // or LinuxAudioDevice
-
-var voiceAssistant = services.BuildServiceProvider()
-    .GetRequiredService<VoiceAssistant>();
-
-voiceAssistant.OnMessageAdded = (message) =>
-    Console.WriteLine($"[{message.Role}]: {message.Content}");
-
-var settings = new OpenAiVoiceSettings
+**2. Add API keys** (`appsettings.json`):
+```json
 {
-    Voice = AssistantVoice.Alloy,
-    Instructions = "You are a helpful assistant."
-};
-
-await voiceAssistant.StartAsync(settings);
-Console.ReadKey(); // Talk now, press any key to stop
-await voiceAssistant.StopAsync();
+  "VoiceProviders": {
+    "OpenAI": "sk-...",
+    "Google": "AIza...",
+    "xAI": "xai-..."
+  }
+}
 ```
 
-### Console App with Google Gemini
-
+**3. Configure services** (`Program.cs`):
 ```csharp
-using Ai.Tlbx.VoiceAssistant;
-using Ai.Tlbx.VoiceAssistant.Provider.Google;
-using Ai.Tlbx.VoiceAssistant.Provider.Google.Models;
-using Ai.Tlbx.VoiceAssistant.Hardware.Windows; // or .Hardware.Linux
-using Microsoft.Extensions.DependencyInjection;
-
-var services = new ServiceCollection();
-services.AddVoiceAssistant()
-    .WithGoogle(apiKey: "your-google-api-key")
-    .WithHardware<WindowsAudioDevice>(); // or LinuxAudioDevice
-
-var voiceAssistant = services.BuildServiceProvider()
-    .GetRequiredService<VoiceAssistant>();
-
-voiceAssistant.OnMessageAdded = (message) =>
-    Console.WriteLine($"[{message.Role}]: {message.Content}");
-
-var settings = new GoogleVoiceSettings
-{
-    Voice = GeminiVoice.Puck,
-    Instructions = "You are a helpful assistant."
-};
-
-await voiceAssistant.StartAsync(settings);
-Console.ReadKey(); // Talk now, press any key to stop
-await voiceAssistant.StopAsync();
+// Register provider factory and audio hardware
+builder.Services.AddSingleton<IVoiceProviderFactory, VoiceProviderFactory>();
+builder.Services.AddScoped<IAudioHardwareAccess, WebAudioAccess>();
 ```
 
-### Web App (Blazor)
-
-**Program.cs:**
-```csharp
-using Ai.Tlbx.VoiceAssistant;
-using Ai.Tlbx.VoiceAssistant.Provider.OpenAi;
-using Ai.Tlbx.VoiceAssistant.Hardware.Web;
-
-var builder = WebApplication.CreateBuilder(args);
-builder.Services.AddRazorPages();
-builder.Services.AddServerSideBlazor();
-
-builder.Services.AddVoiceAssistant()
-    .WithOpenAi(apiKey: builder.Configuration["OpenAI:ApiKey"])
-    .WithHardware<WebAudioAccess>();
-
-var app = builder.Build();
-app.UseStaticFiles();
-app.UseRouting();
-app.MapBlazorHub();
-app.MapFallbackToPage("/_Host");
-app.Run();
-```
-
-**Voice.razor:**
+**4. Create a voice page** (`Voice.razor`):
 ```razor
 @page "/voice"
-@using Ai.Tlbx.VoiceAssistant
-@using Ai.Tlbx.VoiceAssistant.Provider.OpenAi.Models
-@inject VoiceAssistant voiceAssistant
+@inject IVoiceProviderFactory ProviderFactory
+@inject IAudioHardwareAccess AudioHardware
+@inject IConfiguration Config
 
-<button @onclick="ToggleTalk" disabled="@voiceAssistant.IsConnecting">
-    @(voiceAssistant.IsRecording ? "Stop" : "Talk")
-</button>
+<select @bind="_selectedProvider">
+    <option value="openai">OpenAI</option>
+    <option value="google">Google Gemini</option>
+    <option value="xai">xAI Grok</option>
+</select>
 
-<div>
-    @foreach (var msg in voiceAssistant.ChatHistory.GetMessages())
-    {
-        <p><strong>@msg.Role:</strong> @msg.Content</p>
-    }
-</div>
+<button @onclick="Toggle">@(_assistant?.IsRecording == true ? "Stop" : "Talk")</button>
+
+@foreach (var msg in _messages)
+{
+    <p><b>@msg.Role:</b> @msg.Content</p>
+}
 
 @code {
-    private async Task ToggleTalk()
+    private VoiceAssistant? _assistant;
+    private List<ChatMessage> _messages = new();
+    private string _selectedProvider = "openai";
+
+    private async Task Toggle()
     {
-        if (voiceAssistant.IsRecording)
+        if (_assistant?.IsRecording == true)
         {
-            await voiceAssistant.StopAsync();
+            await _assistant.StopAsync();
+            return;
         }
-        else
+
+        // Create provider based on selection
+        var (provider, settings) = _selectedProvider switch
         {
-            var settings = new OpenAiVoiceSettings
-            {
-                Voice = AssistantVoice.Alloy,
-                Instructions = "You are a helpful assistant."
-            };
-            await voiceAssistant.StartAsync(settings);
-        }
-    }
-    
-    protected override Task OnInitializedAsync()
-    {
-        voiceAssistant.OnMessageAdded = _ => InvokeAsync(StateHasChanged);
-        return base.OnInitializedAsync();
-    }
-}
-```
-
-## OpenAI Settings
-
-```csharp
-var settings = new OpenAiVoiceSettings
-{
-    // Required
-    Instructions = "You are a helpful assistant",
-
-    // Voice options: Alloy, Ash, Ballad, Coral, Echo, Sage, Shimmer, Verse, Marin, Cedar
-    Voice = AssistantVoice.Alloy,
-
-    // Speed: 0.25 to 4.0 (1.0 = normal)
-    TalkingSpeed = 1.0,
-
-    // Model (GptRealtime = latest production model, automatically updated)
-    Model = OpenAiRealtimeModel.GptRealtime,
-
-    // Optional
-    MaxTokens = 4000,
-
-    // Context management (default: auto-truncate at 80% retention)
-    AutomaticContextTruncation = true,  // Auto-drop old messages vs throw error
-    RetentionRatio = 0.8,               // Keep 80% of context when truncating
-
-    // Add tools for extra capabilities
-    Tools = { new TimeToolWithSchema() }
-};
-```
-
-## Google Settings
-
-```csharp
-var settings = new GoogleVoiceSettings
-{
-    // Required
-    Instructions = "You are a helpful assistant",
-
-    // Voice options: Puck, Charon, Kore, Fenrir, Aoede
-    Voice = GeminiVoice.Puck,
-
-    // Model (defaults to Gemini 2.0 Flash Exp)
-    Model = GeminiModel.Gemini_2_0_Flash_Exp,
-
-    // Language code (e.g., "en-US", "de-DE", "es-ES")
-    LanguageCode = "en-US",
-
-    // Transcription (enables/disables input/output transcription)
-    TranscriptionConfig = new TranscriptionConfig
-    {
-        EnableInputTranscription = true,
-        EnableOutputTranscription = true
-    },
-
-    // Voice Activity Detection (controls turn-taking and interruption)
-    VoiceActivityDetection = new VoiceActivityDetection
-    {
-        StartOfSpeechSensitivity = SpeechSensitivity.HIGH,  // HIGH for reliable detection
-        EndOfSpeechSensitivity = SpeechSensitivity.LOW,     // LOW enables easier interruption
-        PrefixPaddingMs = 100,                              // Audio buffering before speech start
-        SilenceDurationMs = 200,                            // Silence required before ending speech
-        ActivityHandling = ActivityHandling.START_OF_ACTIVITY_INTERRUPTS, // Enable barge-in
-        AutomaticDetection = true
-    },
-
-    // Add tools for extra capabilities
-    Tools = { new TimeToolWithSchema() }
-};
-```
-
-## WebUI Components
-
-The WebUI package provides ready-made Blazor components:
-
-```razor
-@using Ai.Tlbx.VoiceAssistant.WebUi.Components
-
-<!-- Talk button with loading states -->
-<AiTalkControl OnStartTalking="StartSession" 
-               OnStopTalking="StopSession" 
-               IsTalking="@voiceAssistant.IsRecording" />
-
-<!-- Voice selection dropdown -->
-<VoiceSelect @bind-SelectedVoice="selectedVoice" />
-
-<!-- Speed slider -->
-<VoiceSpeedSlider @bind-SelectedSpeed="talkingSpeed" />
-
-<!-- Microphone picker -->
-<MicrophoneSelect @bind-SelectedMicrophoneId="micId" />
-
-<!-- Chat history display -->
-<ChatWidget />
-
-<!-- Connection status -->
-<StatusWidget ConnectionStatus="@voiceAssistant.ConnectionStatus" />
-```
-
-## Built-in Tools
-
-### Time Tool (included)
-```csharp
-settings.Tools.Add(new TimeToolWithSchema());
-// AI can now tell you the current time in any timezone
-```
-
-### Custom Tools
-
-Create tools for the AI to use:
-
-```csharp
-public class WeatherTool : ValidatedVoiceToolBase<WeatherArgs>
-{
-    public override string Name => "get_weather";
-    public override string Description => "Get current weather for a location";
-
-    public override ToolParameterSchema GetParameterSchema()
-    {
-        return new ToolParameterSchema
-        {
-            Properties = new Dictionary<string, ParameterProperty>
-            {
-                ["location"] = new ParameterProperty
-                {
-                    Type = "string",
-                    Description = "City name"
-                }
-            },
-            Required = new List<string> { "location" }
+            "openai" => (
+                ProviderFactory.CreateOpenAi(Config["VoiceProviders:OpenAI"]!),
+                (IVoiceSettings)new OpenAiVoiceSettings { Instructions = "You are helpful." }
+            ),
+            "google" => (
+                ProviderFactory.CreateGoogle(Config["VoiceProviders:Google"]!),
+                (IVoiceSettings)new GoogleVoiceSettings { Instructions = "You are helpful." }
+            ),
+            "xai" => (
+                ProviderFactory.CreateXai(Config["VoiceProviders:xAI"]!),
+                (IVoiceSettings)new XaiVoiceSettings { Instructions = "You are helpful." }
+            ),
+            _ => throw new InvalidOperationException()
         };
-    }
 
-    protected override async Task<string> ExecuteValidatedAsync(WeatherArgs args)
-    {
-        // Call weather API here
-        return CreateSuccessResult($"Weather in {args.Location}: Sunny, 72°F");
+        _assistant = new VoiceAssistant(provider, AudioHardware);
+        _assistant.OnMessageReceived = msg => InvokeAsync(() => { _messages.Add(msg); StateHasChanged(); });
+
+        await _assistant.StartAsync(settings);
     }
 }
-
-public class WeatherArgs
-{
-    public string Location { get; set; }
-}
-
-// Use it
-settings.Tools.Add(new WeatherTool());
 ```
 
-That's it! The AI can now call your tool during conversations.
+**That's it.** Select a provider, talk to the AI, get voice responses back.
+
+---
+
+## All Packages
+
+| Package | Purpose | NuGet |
+|---------|---------|-------|
+| `Ai.Tlbx.VoiceAssistant` | Core orchestrator | [![NuGet](https://img.shields.io/nuget/v/Ai.Tlbx.VoiceAssistant.svg)](https://www.nuget.org/packages/Ai.Tlbx.VoiceAssistant/) |
+| `...Provider.OpenAi` | OpenAI Realtime API | [![NuGet](https://img.shields.io/nuget/v/Ai.Tlbx.VoiceAssistant.Provider.OpenAi.svg)](https://www.nuget.org/packages/Ai.Tlbx.VoiceAssistant.Provider.OpenAi/) |
+| `...Provider.Google` | Google Gemini Live API | [![NuGet](https://img.shields.io/nuget/v/Ai.Tlbx.VoiceAssistant.Provider.Google.svg)](https://www.nuget.org/packages/Ai.Tlbx.VoiceAssistant.Provider.Google/) |
+| `...Provider.XAi` | xAI Grok Voice Agent API | [![NuGet](https://img.shields.io/nuget/v/Ai.Tlbx.VoiceAssistant.Provider.XAi.svg)](https://www.nuget.org/packages/Ai.Tlbx.VoiceAssistant.Provider.XAi/) |
+| `...Hardware.Web` | Browser audio (Blazor) | [![NuGet](https://img.shields.io/nuget/v/Ai.Tlbx.VoiceAssistant.Hardware.Web.svg)](https://www.nuget.org/packages/Ai.Tlbx.VoiceAssistant.Hardware.Web/) |
+| `...Hardware.Windows` | Native Windows audio | [![NuGet](https://img.shields.io/nuget/v/Ai.Tlbx.VoiceAssistant.Hardware.Windows.svg)](https://www.nuget.org/packages/Ai.Tlbx.VoiceAssistant.Hardware.Windows/) |
+| `...Hardware.Linux` | Native Linux audio (ALSA) | [![NuGet](https://img.shields.io/nuget/v/Ai.Tlbx.VoiceAssistant.Hardware.Linux.svg)](https://www.nuget.org/packages/Ai.Tlbx.VoiceAssistant.Hardware.Linux/) |
+| `...WebUi` | Pre-built Blazor components | [![NuGet](https://img.shields.io/nuget/v/Ai.Tlbx.VoiceAssistant.WebUi.svg)](https://www.nuget.org/packages/Ai.Tlbx.VoiceAssistant.WebUi/) |
+
+---
+
+## Switch Providers in One Line
+
+```csharp
+// OpenAI
+var provider = factory.CreateOpenAi(apiKey);
+var settings = new OpenAiVoiceSettings { Voice = AssistantVoice.Alloy };
+
+// Google Gemini
+var provider = factory.CreateGoogle(apiKey);
+var settings = new GoogleVoiceSettings { Voice = GeminiVoice.Puck };
+
+// xAI Grok
+var provider = factory.CreateXai(apiKey);
+var settings = new XaiVoiceSettings { Voice = XaiVoice.Sage };
+```
+
+Same `VoiceAssistant` API, same tool definitions — just swap the provider.
+
+---
+
+## Tools: Just Write C#
+
+Define tools with plain C# records. Schema is **auto-inferred** — no JSON, no manual mapping:
+
+```csharp
+[Description("Get weather for a location")]
+public class WeatherTool : VoiceToolBase<WeatherTool.Args>
+{
+    public record Args(
+        [property: Description("City name")] string Location,
+        [property: Description("Temperature unit")] TemperatureUnit Unit = TemperatureUnit.Celsius
+    );
+
+    public override string Name => "get_weather";
+
+    public override Task<string> ExecuteAsync(Args args)
+    {
+        return Task.FromResult(CreateSuccessResult(new { temp = 22, location = args.Location }));
+    }
+}
+
+public enum TemperatureUnit { Celsius, Fahrenheit }
+```
+
+**Universal translation:** The same tool works on OpenAI, Google, and xAI. Required/optional parameters, enums, nested objects — all inferred from C# types.
+
+Register in DI:
+```csharp
+builder.Services.AddTransient<IVoiceTool, WeatherTool>();
+```
+
+---
+
+## Key Features
+
+### Noise-Cancelling WebAudio
+The `Hardware.Web` package includes an AudioWorklet-based noise gate that filters background noise before sending to the AI — cleaner input without external dependencies.
+
+### Provider-Agnostic Architecture
+Write once, run on any provider. The orchestrator handles:
+- Audio format conversion (PCM 16-bit @ 24kHz)
+- Tool schema translation per provider
+- Streaming audio playback with interruption support
+- Chat history management
+
+### Built-in Tools
+- `TimeTool` — Current time in any timezone
+- `WeatherTool` — Mock weather (demo)
+- `CalculatorTool` — Basic math operations
+
+---
+
+## Native Apps (Windows/Linux)
+
+> **Note:** Native desktop support works but is less polished than the web implementation. Good for experiments and prototypes.
+
+```csharp
+// Windows (requires Windows 10+)
+dotnet add package Ai.Tlbx.VoiceAssistant.Hardware.Windows
+
+// Linux (requires libasound2-dev)
+dotnet add package Ai.Tlbx.VoiceAssistant.Hardware.Linux
+```
+
+```csharp
+var provider = new OpenAiVoiceProvider(apiKey, logger);
+var hardware = new WindowsAudioAccess(logger); // or LinuxAudioAccess
+
+var assistant = new VoiceAssistant(provider, hardware);
+await assistant.StartAsync(settings);
+
+Console.ReadKey(); // Talk now
+await assistant.StopAsync();
+```
+
+---
 
 ## Requirements
 
-- .NET 9.0
-- API key: OpenAI or Google (depending on provider)
-- **Windows**: Windows 10+
-- **Linux**: `sudo apt-get install libasound2-dev`
-- **Web**: Modern browser with mic permission
+- **.NET 9.0 or 10.0**
+- **API Key:** [OpenAI](https://platform.openai.com/api-keys), [Google AI Studio](https://aistudio.google.com/apikey), or [xAI](https://console.x.ai/)
+- **Web:** Modern browser with microphone permission (HTTPS or localhost)
+- **Windows:** Windows 10+
+- **Linux:** `sudo apt-get install libasound2-dev`
 
-## GitHub
-
-[https://github.com/AiTlbx/Ai.Tlbx.VoiceAssistant](https://github.com/AiTlbx/Ai.Tlbx.VoiceAssistant)
+---
 
 ## License
 
-MIT License
+MIT — do whatever you want.
+
+---
+
+<p align="center">
+  <a href="https://www.nuget.org/packages/Ai.Tlbx.VoiceAssistant/">NuGet</a> •
+  <a href="https://github.com/AiTlbx/Ai.Tlbx.VoiceAssistant/issues">Issues</a> •
+  <a href="https://github.com/AiTlbx/Ai.Tlbx.VoiceAssistant">GitHub</a>
+</p>

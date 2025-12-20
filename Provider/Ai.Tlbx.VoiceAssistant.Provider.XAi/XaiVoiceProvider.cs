@@ -10,7 +10,9 @@ using System.Threading;
 using System.Threading.Tasks;
 using Ai.Tlbx.VoiceAssistant.Interfaces;
 using Ai.Tlbx.VoiceAssistant.Models;
+using Ai.Tlbx.VoiceAssistant.Reflection;
 using Ai.Tlbx.VoiceAssistant.Provider.XAi.Models;
+using Ai.Tlbx.VoiceAssistant.Provider.XAi.Translation;
 
 namespace Ai.Tlbx.VoiceAssistant.Provider.XAi
 {
@@ -26,6 +28,7 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.XAi
 
         private readonly string _apiKey;
         private readonly Action<LogLevel, string> _logAction;
+        private readonly XaiToolTranslator _toolTranslator = new();
         private ClientWebSocket? _webSocket;
         private Task? _receiveTask;
         private CancellationTokenSource? _cts;
@@ -306,23 +309,17 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.XAi
 
             if (_settings.EnableWebSearch)
             {
-                tools.Add(new { type = "web_search" });
+                tools.Add(XaiToolTranslator.CreateWebSearchTool());
             }
 
             if (_settings.EnableXSearch)
             {
-                tools.Add(new { type = "x_search" });
+                tools.Add(XaiToolTranslator.CreateXSearchTool());
             }
 
             foreach (var tool in _settings.Tools)
             {
-                tools.Add(new
-                {
-                    type = "function",
-                    name = tool.Name,
-                    description = tool.Description,
-                    parameters = GetToolParameters(tool)
-                });
+                tools.Add(_toolTranslator.TranslateToolDefinition(tool, ToolSchemaInferrer.InferSchema(tool.ArgsType)));
             }
 
             var session = new Dictionary<string, object>
@@ -720,26 +717,6 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.XAi
             }
         }
 
-        private object GetToolParameters(IVoiceTool tool)
-        {
-            if (tool is IVoiceToolWithSchema schemaTools)
-            {
-                var schema = schemaTools.GetParameterSchema();
-                return new
-                {
-                    type = schema.Type,
-                    properties = schema.Properties?.ToDictionary(
-                        kvp => kvp.Key,
-                        kvp => SerializeParameterProperty(kvp.Value)
-                    ) ?? new Dictionary<string, object>(),
-                    required = schema.Required ?? new List<string>(),
-                    additionalProperties = schema.AdditionalProperties
-                };
-            }
-
-            return new { type = "object", properties = new { } };
-        }
-
         private string FormatToolArguments(string argumentsJson)
         {
             try
@@ -766,51 +743,6 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.XAi
             {
                 return argumentsJson;
             }
-        }
-
-        private object SerializeParameterProperty(ParameterProperty property)
-        {
-            var result = new Dictionary<string, object>
-            {
-                ["type"] = property.Type
-            };
-
-            if (!string.IsNullOrEmpty(property.Description))
-                result["description"] = property.Description;
-
-            if (property.Enum != null && property.Enum.Count > 0)
-                result["enum"] = property.Enum;
-
-            if (property.Default != null)
-                result["default"] = property.Default;
-
-            if (property.Properties != null && property.Properties.Count > 0)
-            {
-                result["properties"] = property.Properties.ToDictionary(
-                    kvp => kvp.Key,
-                    kvp => SerializeParameterProperty(kvp.Value)
-                );
-            }
-
-            if (property.Items != null)
-                result["items"] = SerializeParameterProperty(property.Items);
-
-            if (property.Minimum.HasValue)
-                result["minimum"] = property.Minimum.Value;
-
-            if (property.Maximum.HasValue)
-                result["maximum"] = property.Maximum.Value;
-
-            if (property.MinLength.HasValue)
-                result["minLength"] = property.MinLength.Value;
-
-            if (property.MaxLength.HasValue)
-                result["maxLength"] = property.MaxLength.Value;
-
-            if (!string.IsNullOrEmpty(property.Pattern))
-                result["pattern"] = property.Pattern;
-
-            return result;
         }
 
         /// <summary>

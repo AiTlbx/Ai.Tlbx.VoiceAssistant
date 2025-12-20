@@ -87,20 +87,8 @@
 @code {
     [CascadingParameter] protected VoiceAssistant? VoiceAssistant { get; set; }
     
-    private bool _showDebugToolCalls = false;
-    [Parameter] 
-    public bool ShowDebugToolCalls 
-    { 
-        get => _showDebugToolCalls;
-        set
-        {
-            if (_showDebugToolCalls != value)
-            {
-                _showDebugToolCalls = value;
-                InvokeAsync(StateHasChanged);
-            }
-        }
-    }
+    [Parameter]
+    public bool ShowDebugToolCalls { get; set; }
     
     [Parameter] public bool ShowToolCalls { get; set; } = true;
     

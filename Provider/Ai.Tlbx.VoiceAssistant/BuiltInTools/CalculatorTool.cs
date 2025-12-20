@@ -1,88 +1,50 @@
 using System;
-using System.Collections.Generic;
+using System.ComponentModel;
 using System.Threading.Tasks;
-using Ai.Tlbx.VoiceAssistant.Models;
 
 namespace Ai.Tlbx.VoiceAssistant.BuiltInTools
 {
-    /// <summary>
-    /// Calculator tool for performing mathematical operations.
-    /// </summary>
-    public class CalculatorTool : ValidatedVoiceToolBase<CalculatorTool.CalculatorArgs>
+    public enum CalculatorOperation
     {
-        /// <summary>
-        /// Arguments for the calculator tool.
-        /// </summary>
-        public class CalculatorArgs
-        {
-            /// <summary>
-            /// The mathematical operation to perform.
-            /// </summary>
-            public string Operation { get; set; } = "add";
+        Add,
+        Subtract,
+        Multiply,
+        Divide,
+        Power,
+        Modulo
+    }
 
-            /// <summary>
-            /// The first operand.
-            /// </summary>
-            public double A { get; set; }
+    [Description("Perform mathematical calculations (add, subtract, multiply, divide, power, modulo)")]
+    public class CalculatorTool : VoiceToolBase<CalculatorTool.Args>
+    {
+        public record Args(
+            [property: Description("The mathematical operation to perform")] CalculatorOperation Operation,
+            [property: Description("The first operand")] double A,
+            [property: Description("The second operand")] double B
+        );
 
-            /// <summary>
-            /// The second operand.
-            /// </summary>
-            public double B { get; set; }
-        }
-
-        /// <inheritdoc/>
         public override string Name => "calculate";
 
-        /// <inheritdoc/>
-        public override string Description => "Perform mathematical calculations (add, subtract, multiply, divide, power, modulo)";
-
-        /// <inheritdoc/>
-        public override ToolParameterSchema GetParameterSchema() => new()
-        {
-            Properties = new Dictionary<string, ParameterProperty>
-            {
-                ["operation"] = new ParameterProperty
-                {
-                    Type = "string",
-                    Description = "The mathematical operation to perform",
-                    Enum = new List<string> { "add", "subtract", "multiply", "divide", "power", "modulo" }
-                },
-                ["a"] = new ParameterProperty
-                {
-                    Type = "number",
-                    Description = "The first operand"
-                },
-                ["b"] = new ParameterProperty
-                {
-                    Type = "number",
-                    Description = "The second operand"
-                }
-            },
-            Required = new List<string> { "operation", "a", "b" }
-        };
-
-        /// <inheritdoc/>
-        protected override Task<string> ExecuteValidatedAsync(CalculatorArgs args)
+        public override Task<string> ExecuteAsync(Args args)
         {
             try
             {
-                double result = args.Operation.ToLowerInvariant() switch
+                double result = args.Operation switch
                 {
-                    "add" => args.A + args.B,
-                    "subtract" => args.A - args.B,
-                    "multiply" => args.A * args.B,
-                    "divide" => args.B != 0 ? args.A / args.B : double.NaN,
-                    "power" => Math.Pow(args.A, args.B),
-                    "modulo" => args.B != 0 ? args.A % args.B : double.NaN,
+                    CalculatorOperation.Add => args.A + args.B,
+                    CalculatorOperation.Subtract => args.A - args.B,
+                    CalculatorOperation.Multiply => args.A * args.B,
+                    CalculatorOperation.Divide => args.B != 0 ? args.A / args.B : double.NaN,
+                    CalculatorOperation.Power => Math.Pow(args.A, args.B),
+                    CalculatorOperation.Modulo => args.B != 0 ? args.A % args.B : double.NaN,
                     _ => double.NaN
                 };
 
                 if (double.IsNaN(result))
                 {
                     return Task.FromResult(CreateErrorResult(
-                        args.Operation == "divide" && args.B == 0 ? "Division by zero" : 
-                        args.Operation == "modulo" && args.B == 0 ? "Modulo by zero" :
+                        args.Operation == CalculatorOperation.Divide && args.B == 0 ? "Division by zero" :
+                        args.Operation == CalculatorOperation.Modulo && args.B == 0 ? "Modulo by zero" :
                         $"Unknown operation: {args.Operation}"
                     ));
                 }
@@ -94,7 +56,7 @@ namespace Ai.Tlbx.VoiceAssistant.BuiltInTools
 
                 var response = new
                 {
-                    operation = args.Operation,
+                    operation = args.Operation.ToString().ToLowerInvariant(),
                     a = args.A,
                     b = args.B,
                     result = result,
@@ -109,16 +71,16 @@ namespace Ai.Tlbx.VoiceAssistant.BuiltInTools
             }
         }
 
-        private string GetOperatorSymbol(string operation)
+        private static string GetOperatorSymbol(CalculatorOperation operation)
         {
-            return operation.ToLowerInvariant() switch
+            return operation switch
             {
-                "add" => "+",
-                "subtract" => "-",
-                "multiply" => "×",
-                "divide" => "÷",
-                "power" => "^",
-                "modulo" => "%",
+                CalculatorOperation.Add => "+",
+                CalculatorOperation.Subtract => "-",
+                CalculatorOperation.Multiply => "×",
+                CalculatorOperation.Divide => "÷",
+                CalculatorOperation.Power => "^",
+                CalculatorOperation.Modulo => "%",
                 _ => "?"
             };
         }

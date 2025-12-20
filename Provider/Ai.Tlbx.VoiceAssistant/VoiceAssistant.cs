@@ -320,10 +320,12 @@ namespace Ai.Tlbx.VoiceAssistant
                 _logAction(LogLevel.Info, $"Playing back {recordedAudioChunks.Count} audio chunks");
 
 #if DEBUG
+#pragma warning disable CS0162 // Unreachable code detected (SAMPLE_SKIP_PERCENTAGE is intentionally 0)
                 if (SAMPLE_SKIP_PERCENTAGE > 0)
                 {
                     _logAction(LogLevel.Warn, $"🎤💀 MICROPHONE TEST: Sample skip filter ({SAMPLE_SKIP_PERCENTAGE}%) will be applied to playback - listen for artifacts!");
                 }
+#pragma warning restore CS0162
 #endif
 
                 // Play back all recorded chunks
@@ -512,6 +514,7 @@ namespace Ai.Tlbx.VoiceAssistant
         /// 🎤💀 EXPERIMENTAL: Skips samples from base64 PCM16 audio for bandwidth testing.
         /// WARNING: This creates aliasing artifacts and violates audio engineering best practices!
         /// </summary>
+#pragma warning disable CS0162 // Unreachable code detected (SAMPLE_SKIP_PERCENTAGE is intentionally 0)
         private string ApplySampleSkipFilter(string base64Audio)
         {
             if (SAMPLE_SKIP_PERCENTAGE <= 0 || SAMPLE_SKIP_PERCENTAGE >= 100)
@@ -563,6 +566,7 @@ namespace Ai.Tlbx.VoiceAssistant
             // Encode back to base64
             return Convert.ToBase64String(filteredBytes);
         }
+#pragma warning restore CS0162
 #endif
 
         private int _audioReceivedCount = 0;
@@ -585,9 +589,11 @@ namespace Ai.Tlbx.VoiceAssistant
                     }
 
 #if DEBUG
-                    var audioToSend = ApplySampleSkipFilter(e.Base64EncodedPcm16Audio);
+#pragma warning disable CS0162 // Unreachable code detected (SAMPLE_SKIP_PERCENTAGE is intentionally 0)
+                    var audioToSend = ApplySampleSkipFilter(e.Base64EncodedPcm16Audio ?? "");
+#pragma warning restore CS0162
 #else
-                    var audioToSend = e.Base64EncodedPcm16Audio;
+                    var audioToSend = e.Base64EncodedPcm16Audio ?? "";
 #endif
                     await _provider.ProcessAudioAsync(audioToSend);
                 }

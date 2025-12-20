@@ -1,69 +1,35 @@
 using System;
-using System.Collections.Generic;
-using System.Globalization;
-using System.Text.Json;
+using System.ComponentModel;
 using System.Threading.Tasks;
-using Ai.Tlbx.VoiceAssistant.Models;
 
 namespace Ai.Tlbx.VoiceAssistant.BuiltInTools
 {
-    /// <summary>
-    /// Enhanced time tool with parameter schema support for timezone conversion.
-    /// </summary>
-    public class TimeToolWithSchema : ValidatedVoiceToolBase<TimeToolWithSchema.TimeArgs>
+    public enum TimeFormat
     {
-        /// <summary>
-        /// Arguments for the time tool.
-        /// </summary>
-        public class TimeArgs
-        {
-            /// <summary>
-            /// The timezone to convert to (optional).
-            /// </summary>
-            public string TimeZone { get; set; }
+        Full,
+        Date,
+        Time,
+        Iso8601,
+        Unix
+    }
 
-            /// <summary>
-            /// The format for the time output.
-            /// </summary>
-            public string Format { get; set; } = "full";
-        }
+    [Description("Gets the current date and time with optional timezone conversion and formatting")]
+    public class TimeToolWithSchema : VoiceToolBase<TimeToolWithSchema.Args>
+    {
+        public record Args(
+            [property: Description("The timezone to convert to (e.g., 'UTC', 'EST', 'PST', 'Europe/London'). If not specified, uses server timezone (Berlin time).")] string? TimeZone = null,
+            [property: Description("The format for the output")] TimeFormat Format = TimeFormat.Full
+        );
 
-        /// <inheritdoc/>
         public override string Name => "get_current_time_advanced";
 
-        /// <inheritdoc/>
-        public override string Description => "Gets the current date and time with optional timezone conversion and formatting";
-
-        /// <inheritdoc/>
-        public override ToolParameterSchema GetParameterSchema() => new()
-        {
-            Properties = new Dictionary<string, ParameterProperty>
-            {
-                ["timeZone"] = new ParameterProperty
-                {
-                    Type = "string",
-                    Description = "The timezone to convert to (e.g., 'UTC', 'EST', 'PST', 'Europe/London'). If not specified, uses server timezone (Berlin time)."
-                },
-                ["format"] = new ParameterProperty
-                {
-                    Type = "string",
-                    Description = "The format for the output",
-                    Enum = new List<string> { "full", "date", "time", "iso8601", "unix" },
-                    Default = "full"
-                }
-            },
-            Required = new List<string>() // All parameters are optional
-        };
-
-        /// <inheritdoc/>
-        protected override Task<string> ExecuteValidatedAsync(TimeArgs args)
+        public override Task<string> ExecuteAsync(Args args)
         {
             try
             {
                 DateTime currentTime = DateTime.Now;
                 TimeZoneInfo targetTimeZone = TimeZoneInfo.Local;
 
-                // Handle timezone conversion
                 if (!string.IsNullOrEmpty(args.TimeZone))
                 {
                     try
@@ -77,13 +43,13 @@ namespace Ai.Tlbx.VoiceAssistant.BuiltInTools
                     }
                 }
 
-                string formattedTime = args.Format?.ToLowerInvariant() switch
+                string formattedTime = args.Format switch
                 {
-                    "date" => currentTime.ToString("yyyy-MM-dd"),
-                    "time" => currentTime.ToString("HH:mm:ss"),
-                    "iso8601" => currentTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fffK"),
-                    "unix" => ((DateTimeOffset)currentTime).ToUnixTimeSeconds().ToString(),
-                    _ => currentTime.ToString("yyyy-MM-dd HH:mm:ss") // full format
+                    TimeFormat.Date => currentTime.ToString("yyyy-MM-dd"),
+                    TimeFormat.Time => currentTime.ToString("HH:mm:ss"),
+                    TimeFormat.Iso8601 => currentTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fffK"),
+                    TimeFormat.Unix => ((DateTimeOffset)currentTime).ToUnixTimeSeconds().ToString(),
+                    _ => currentTime.ToString("yyyy-MM-dd HH:mm:ss")
                 };
 
                 var result = new
@@ -103,9 +69,8 @@ namespace Ai.Tlbx.VoiceAssistant.BuiltInTools
             }
         }
 
-        private TimeZoneInfo GetTimeZoneInfo(string timeZone)
+        private static TimeZoneInfo GetTimeZoneInfo(string timeZone)
         {
-            // Common timezone aliases
             return timeZone.ToUpperInvariant() switch
             {
                 "UTC" => TimeZoneInfo.Utc,

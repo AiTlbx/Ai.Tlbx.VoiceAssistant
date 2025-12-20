@@ -177,13 +177,13 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Web
                 var diagnostic = System.Text.Json.JsonSerializer.Deserialize<JsonElement>(diagnosticJson);
                 
                 var timestamp = diagnostic.GetProperty("timestamp").GetString();
-                var message = diagnostic.GetProperty("message").GetString();
-                var dataJson = diagnostic.TryGetProperty("data", out var dataElement) && dataElement.ValueKind != JsonValueKind.Null 
-                    ? dataElement.GetString() 
+                var message = diagnostic.GetProperty("message").GetString() ?? "";
+                var dataJson = diagnostic.TryGetProperty("data", out var dataElement) && dataElement.ValueKind != JsonValueKind.Null
+                    ? dataElement.GetString()
                     : null;
-                
+
                 // Only log important JS diagnostic messages (errors, warnings, or significant events)
-                if (message.Contains("error", StringComparison.OrdinalIgnoreCase) || 
+                if (message.Contains("error", StringComparison.OrdinalIgnoreCase) ||
                     message.Contains("failed", StringComparison.OrdinalIgnoreCase) ||
                     message.Contains("Audio system fully initialized", StringComparison.OrdinalIgnoreCase))
                 {
@@ -476,7 +476,7 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Web
                 CleanupRecording();
                 return true; // Pretend success since we can't actually verify
             }
-            catch (JSException jsEx)
+            catch (JSException)
             {
                 // Handle JavaScript errors gracefully (e.g., if audio context is already closed or JSON conversion issues)
                 // This is expected when stopping recording in some browser states
