@@ -1,5 +1,4 @@
 using System;
-using System.Linq;
 using Ai.Tlbx.VoiceAssistant.Interfaces;
 using Ai.Tlbx.VoiceAssistant.Models;
 using Ai.Tlbx.VoiceAssistant.Provider.OpenAi;
@@ -33,35 +32,17 @@ namespace Ai.Tlbx.VoiceAssistant.Demo.Web.Services
         public IVoiceProvider CreateProvider(VoiceProviderType providerType)
         {
             var logAction = _serviceProvider.GetService<Action<LogLevel, string>>();
-            var tools = _serviceProvider.GetServices<IVoiceTool>().ToList();
 
-            IVoiceProvider provider = providerType switch
+            return providerType switch
             {
-                VoiceProviderType.OpenAI => CreateOpenAIProvider(logAction, tools),
-                VoiceProviderType.Google => CreateGoogleProvider(logAction, tools),
-                VoiceProviderType.XAi => CreateXAiProvider(logAction, tools),
+                VoiceProviderType.OpenAI => new OpenAiVoiceProvider(
+                    Environment.GetEnvironmentVariable("OPENAI_API_KEY"), logAction),
+                VoiceProviderType.Google => new GoogleVoiceProvider(
+                    Environment.GetEnvironmentVariable("GOOGLE_API_KEY"), logAction),
+                VoiceProviderType.XAi => new XaiVoiceProvider(
+                    Environment.GetEnvironmentVariable("XAI_API_KEY"), logAction),
                 _ => throw new ArgumentException($"Unknown provider type: {providerType}", nameof(providerType))
             };
-
-            return provider;
-        }
-
-        private IVoiceProvider CreateOpenAIProvider(Action<LogLevel, string>? logAction, System.Collections.Generic.List<IVoiceTool> tools)
-        {
-            var apiKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY");
-            return new OpenAiVoiceProvider(apiKey, logAction);
-        }
-
-        private IVoiceProvider CreateGoogleProvider(Action<LogLevel, string>? logAction, System.Collections.Generic.List<IVoiceTool> tools)
-        {
-            var apiKey = Environment.GetEnvironmentVariable("GOOGLE_API_KEY");
-            return new GoogleVoiceProvider(apiKey, logAction);
-        }
-
-        private IVoiceProvider CreateXAiProvider(Action<LogLevel, string>? logAction, System.Collections.Generic.List<IVoiceTool> tools)
-        {
-            var apiKey = Environment.GetEnvironmentVariable("XAI_API_KEY");
-            return new XaiVoiceProvider(apiKey, logAction);
         }
     }
 }
