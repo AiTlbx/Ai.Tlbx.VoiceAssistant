@@ -1245,6 +1245,18 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Linux
         }
 
         /// <summary>
+        /// Waits until all queued audio has been played back.
+        /// Linux uses blocking I/O with snd_pcm_drain, so playback is already synchronous.
+        /// </summary>
+        /// <param name="timeout">Maximum time to wait (not used in Linux implementation).</param>
+        /// <returns>Always returns true since Linux playback is synchronous.</returns>
+        public Task<bool> WaitForPlaybackDrainAsync(TimeSpan? timeout = null)
+        {
+            Log(LogLevel.Info, "WaitForPlaybackDrain: Linux uses blocking I/O, playback already complete");
+            return Task.FromResult(true);
+        }
+
+        /// <summary>
         /// Sets the diagnostic logging level for the Linux audio device.
         /// </summary>
         /// <param name="level">The diagnostic level to set.</param>

@@ -90,5 +90,12 @@ namespace Ai.Tlbx.VoiceAssistant.Interfaces
         /// </summary>
         /// <param name="logAction">Action to be called with log level and message.</param>
         void SetLogAction(Action<LogLevel, string> logAction);
+
+        /// <summary>
+        /// Waits until all queued audio has been played back.
+        /// </summary>
+        /// <param name="timeout">Maximum time to wait. Defaults to 30 seconds.</param>
+        /// <returns>True if playback completed within timeout, false if timed out.</returns>
+        Task<bool> WaitForPlaybackDrainAsync(TimeSpan? timeout = null);
     }
 }

@@ -691,6 +691,34 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Web
             return _diagnosticLevel;
         }
 
+        /// <summary>
+        /// Waits until all queued audio has been played back.
+        /// </summary>
+        /// <param name="timeout">Maximum time to wait.</param>
+        /// <returns>True if playback completed, false if timed out.</returns>
+        public async Task<bool> WaitForPlaybackDrainAsync(TimeSpan? timeout = null)
+        {
+            var maxWait = timeout ?? TimeSpan.FromSeconds(30);
+            var startTime = DateTime.UtcNow;
+
+            // Wait for channel to drain (TryPeek returns false when empty)
+            while (_audioChannel.Reader.TryPeek(out _))
+            {
+                if (DateTime.UtcNow - startTime > maxWait)
+                {
+                    Log(LogLevel.Warn, "WaitForPlaybackDrain timed out waiting for channel");
+                    return false;
+                }
+                await Task.Delay(50);
+            }
+
+            // Small grace period for JS audio to finish playing
+            await Task.Delay(100);
+
+            Log(LogLevel.Info, $"Playback drain complete after {(DateTime.UtcNow - startTime).TotalMilliseconds:F0}ms");
+            return true;
+        }
+
         async ValueTask IAsyncDisposable.DisposeAsync()
         {
             // Stop the audio processor task

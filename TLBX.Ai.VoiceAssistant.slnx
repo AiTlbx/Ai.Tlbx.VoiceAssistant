@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/Demo/">
+    <Project Path="Demo/Ai.Tlbx.VoiceAssistant.Demo.Console/Ai.Tlbx.VoiceAssistant.Demo.Console.csproj" />
     <Project Path="Demo/Ai.Tlbx.VoiceAssistant.Demo.Linux/Ai.Tlbx.VoiceAssistant.Demo.Linux.csproj" />
     <Project Path="Demo/Ai.Tlbx.VoiceAssistant.Demo.Web/Ai.Tlbx.VoiceAssistant.Demo.Web.csproj" />
     <Project Path="Demo/Ai.Tlbx.VoiceAssistant.Demo.Windows/Ai.Tlbx.VoiceAssistant.Demo.Windows.csproj" />

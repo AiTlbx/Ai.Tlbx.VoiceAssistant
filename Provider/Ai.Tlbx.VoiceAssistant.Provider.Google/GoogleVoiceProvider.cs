@@ -45,6 +45,9 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.Google
         private readonly Dictionary<string, string> _pendingToolCalls = new();
         private int _audioTxCount = 0;
         private int _audioRxCount = 0;
+        private DateTime _lastAudioSentTime = DateTime.MinValue;
+        private bool _audioStreamEnded = false;
+        private const int AUDIO_STREAM_END_DELAY_MS = 1500; // Send audioStreamEnd after 1.5s of silence
 
         /// <summary>
         /// Gets a value indicating whether the provider is connected and ready.
@@ -208,11 +211,21 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.Google
 
             try
             {
+                // Check if we should send audioStreamEnd (after silence period)
                 if (string.IsNullOrEmpty(base64Audio))
                 {
-                    _logAction(LogLevel.Warn, "[AUDIO-TX] Received null or empty audio data, skipping");
+                    await CheckAndSendAudioStreamEndAsync();
                     return;
                 }
+
+                // Reset audioStreamEnded flag when new audio arrives
+                if (_audioStreamEnded)
+                {
+                    _audioStreamEnded = false;
+                    _logAction(LogLevel.Info, "[AUDIO-TX] Audio stream resumed after silence");
+                }
+
+                _lastAudioSentTime = DateTime.UtcNow;
 
                 var message = new RealtimeInputMessage
                 {
@@ -235,6 +248,32 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.Google
             {
                 _logAction(LogLevel.Error, $"Error processing audio: {ex.Message}");
                 OnError?.Invoke($"Audio processing error: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Checks if enough silence has passed and sends audioStreamEnd to flush cached audio.
+        /// </summary>
+        private async Task CheckAndSendAudioStreamEndAsync()
+        {
+            if (_audioStreamEnded || _lastAudioSentTime == DateTime.MinValue)
+                return;
+
+            var silenceDuration = (DateTime.UtcNow - _lastAudioSentTime).TotalMilliseconds;
+            if (silenceDuration >= AUDIO_STREAM_END_DELAY_MS)
+            {
+                _audioStreamEnded = true;
+                _logAction(LogLevel.Info, $"[AUDIO-TX] Sending audioStreamEnd after {silenceDuration:F0}ms of silence");
+
+                var message = new RealtimeInputMessage
+                {
+                    RealtimeInput = new RealtimeInput
+                    {
+                        AudioStreamEnd = true
+                    }
+                };
+
+                await SendMessageAsync(message);
             }
         }
 
@@ -368,12 +407,15 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.Google
                             SilenceDurationMs = _settings.VoiceActivityDetection.SilenceDurationMs,
                             Disabled = false
                         } : new Protocol.AutomaticActivityDetection { Disabled = true },
-                        ActivityHandling = _settings.VoiceActivityDetection.ActivityHandling.ToApiString()
+                        ActivityHandling = _settings.VoiceActivityDetection.ActivityHandling.ToApiString(),
+                        TurnCoverage = "TURN_INCLUDES_ALL_INPUT"
                     }
                 }
             };
 
-            _logAction(LogLevel.Info, $"Configuring session - Transcription (In/Out): {_settings.TranscriptionConfig.EnableInputTranscription}/{_settings.TranscriptionConfig.EnableOutputTranscription}, VAD: {_settings.VoiceActivityDetection.StartOfSpeechSensitivity}/{_settings.VoiceActivityDetection.EndOfSpeechSensitivity}, Silence: {_settings.VoiceActivityDetection.SilenceDurationMs}ms");
+            _logAction(LogLevel.Info, $"Configuring session - Transcription (In/Out): {_settings.TranscriptionConfig.EnableInputTranscription}/{_settings.TranscriptionConfig.EnableOutputTranscription}");
+            _logAction(LogLevel.Info, $"VAD: Start={_settings.VoiceActivityDetection.StartOfSpeechSensitivity}, End={_settings.VoiceActivityDetection.EndOfSpeechSensitivity}, Prefix={_settings.VoiceActivityDetection.PrefixPaddingMs}ms, Silence={_settings.VoiceActivityDetection.SilenceDurationMs}ms");
+            _logAction(LogLevel.Info, $"Turn handling: ActivityHandling={_settings.VoiceActivityDetection.ActivityHandling}, TurnCoverage=ALL_INPUT");
 
             await SendMessageAsync(setup);
             _logAction(LogLevel.Info, "Setup message sent, awaiting confirmation");
@@ -655,9 +697,11 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.Google
                     OnMessageReceived?.Invoke(ChatMessage.CreateAssistantMessage(transcriptText));
                     _currentTranscript.Clear();
                 }
-            }
 
-            await Task.CompletedTask;
+                // Reset audio stream tracking after model turn - ready for new user input
+                _audioStreamEnded = false;
+                _lastAudioSentTime = DateTime.MinValue;
+            }
         }
 
         private async Task HandleToolCall(JsonElement toolCall)

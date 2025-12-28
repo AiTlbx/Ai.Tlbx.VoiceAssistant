@@ -14,7 +14,7 @@ namespace Ai.Tlbx.VoiceAssistant
     public sealed class VoiceAssistant : IAsyncDisposable
     {
         private readonly IAudioHardwareAccess _hardwareAccess;
-        private readonly IVoiceProvider _provider;
+        private readonly IVoiceProvider? _provider;
         private readonly ChatHistoryManager _chatHistory;
         private readonly Action<LogLevel, string> _logAction;
         
@@ -94,20 +94,23 @@ namespace Ai.Tlbx.VoiceAssistant
         /// <param name="provider">The AI voice provider implementation.</param>
         /// <param name="logAction">Optional logging action for compatibility.</param>
         public VoiceAssistant(
-            IAudioHardwareAccess hardwareAccess, 
-            IVoiceProvider provider,
+            IAudioHardwareAccess hardwareAccess,
+            IVoiceProvider? provider,
             Action<LogLevel, string>? logAction = null)
         {
             _hardwareAccess = hardwareAccess ?? throw new ArgumentNullException(nameof(hardwareAccess));
-            _provider = provider ?? throw new ArgumentNullException(nameof(provider));
+            _provider = provider; // Provider can be null for mic testing only
             _logAction = logAction ?? ((level, message) => { /* no-op */ });
             _chatHistory = new ChatHistoryManager();
-            
+
             // Set up hardware logging
             _hardwareAccess.SetLogAction(_logAction);
-            
-            // Wire up provider callbacks
-            WireUpProviderCallbacks();
+
+            // Wire up provider callbacks (only if provider is set)
+            if (_provider != null)
+            {
+                WireUpProviderCallbacks();
+            }
         }
 
         /// <summary>
@@ -128,10 +131,15 @@ namespace Ai.Tlbx.VoiceAssistant
         /// <returns>A task representing the start operation.</returns>
         public async Task StartAsync(IVoiceSettings settings, CancellationToken cancellationToken)
         {
+            if (_provider == null)
+            {
+                throw new InvalidOperationException("Cannot start voice assistant: no provider configured. VoiceAssistant was created for mic testing only.");
+            }
+
             try
             {
                 _lastErrorMessage = null;
-                
+
                 if (!_isInitialized || !_provider.IsConnected)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
@@ -222,9 +230,12 @@ namespace Ai.Tlbx.VoiceAssistant
                 
                 // Clear any queued audio immediately
                 await _hardwareAccess.ClearAudioQueue();
-                
-                // Then disconnect from provider
-                await _provider.DisconnectAsync();
+
+                // Then disconnect from provider (if connected)
+                if (_provider != null)
+                {
+                    await _provider.DisconnectAsync();
+                }
                 _isInitialized = false;
                 
                 ReportStatus("Voice assistant stopped");
@@ -247,9 +258,12 @@ namespace Ai.Tlbx.VoiceAssistant
         {
             try
             {
-                // Send interrupt to provider
-                await _provider.SendInterruptAsync();
-                
+                // Send interrupt to provider (if connected)
+                if (_provider != null)
+                {
+                    await _provider.SendInterruptAsync();
+                }
+
                 // Clear any pending audio to stop playback immediately
                 await _hardwareAccess.ClearAudioQueue();
                 
@@ -338,12 +352,16 @@ namespace Ai.Tlbx.VoiceAssistant
 #endif
                     _hardwareAccess.PlayAudio(audioToPlay, 24000);
                 }
-                
+
+                // Wait for playback buffer to drain properly
+                _logAction(LogLevel.Info, "Waiting for playback to drain...");
+                await _hardwareAccess.WaitForPlaybackDrainAsync(TimeSpan.FromSeconds(15));
+
                 // Play final success beep (660 Hz for 300ms)
-                await Task.Delay(200); // Small pause before final beep
                 _logAction(LogLevel.Info, "Playing success beep");
                 _hardwareAccess.PlayAudio(GenerateBeep(660, 300), 24000);
-                
+                await _hardwareAccess.WaitForPlaybackDrainAsync(TimeSpan.FromSeconds(2));
+
                 ReportStatus("Microphone test completed successfully");
                 _logAction(LogLevel.Info, "Microphone test completed successfully");
                 return true;
@@ -448,6 +466,8 @@ namespace Ai.Tlbx.VoiceAssistant
 
         private void WireUpProviderCallbacks()
         {
+            if (_provider == null) return;
+
             _provider.OnMessageReceived = (message) =>
             {
                 _chatHistory.AddMessage(message);
@@ -576,12 +596,13 @@ namespace Ai.Tlbx.VoiceAssistant
             try
             {
                 _audioReceivedCount++;
+                var isConnected = _provider?.IsConnected ?? false;
                 if (_audioReceivedCount % 50 == 1)
                 {
-                    _logAction(LogLevel.Info, $"[VA-AUDIO] OnAudioDataReceived called {_audioReceivedCount} times, IsConnected: {_provider.IsConnected}, IsTesting: {_isMicrophoneTesting}, AudioLength: {e.Base64EncodedPcm16Audio?.Length ?? 0}");
+                    _logAction(LogLevel.Info, $"[VA-AUDIO] OnAudioDataReceived called {_audioReceivedCount} times, IsConnected: {isConnected}, IsTesting: {_isMicrophoneTesting}, AudioLength: {e.Base64EncodedPcm16Audio?.Length ?? 0}");
                 }
 
-                if (_provider.IsConnected && !_isMicrophoneTesting)
+                if (isConnected && !_isMicrophoneTesting)
                 {
                     if (_audioReceivedCount % 50 == 1)
                     {
@@ -595,13 +616,16 @@ namespace Ai.Tlbx.VoiceAssistant
 #else
                     var audioToSend = e.Base64EncodedPcm16Audio ?? "";
 #endif
-                    await _provider.ProcessAudioAsync(audioToSend);
+                    if (_provider != null)
+                    {
+                        await _provider.ProcessAudioAsync(audioToSend);
+                    }
                 }
                 else
                 {
                     if (_audioReceivedCount % 50 == 1)
                     {
-                        _logAction(LogLevel.Warn, $"[VA-AUDIO] Skipping audio - IsConnected: {_provider.IsConnected}, IsTesting: {_isMicrophoneTesting}");
+                        _logAction(LogLevel.Warn, $"[VA-AUDIO] Skipping audio - IsConnected: {isConnected}, IsTesting: {_isMicrophoneTesting}");
                     }
                 }
             }
@@ -637,7 +661,10 @@ namespace Ai.Tlbx.VoiceAssistant
                     await StopAsync();
                 }
                 
-                await _provider.DisposeAsync();
+                if (_provider != null)
+                {
+                    await _provider.DisposeAsync();
+                }
                 await _hardwareAccess.DisposeAsync();
                 
                 _isDisposed = true;

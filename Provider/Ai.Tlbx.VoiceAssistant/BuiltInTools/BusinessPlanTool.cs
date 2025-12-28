@@ -45,22 +45,22 @@ namespace Ai.Tlbx.VoiceAssistant.BuiltInTools
             [property: Description("The industry sector the business operates in")]
             IndustryType Industry,
 
-            [property: Description("Target funding amount in USD (e.g., 500000 for $500k)")]
+            [property: Description("Target funding amount in USD as a number (e.g., 500000 for $500k)")]
             double TargetFunding,
 
-            [property: Description("Current funding stage of the company")]
+            [property: Description("Current funding stage of the company, or null if not yet determined")]
             FundingStage? FundingStage = null,
 
-            [property: Description("Go-to-market strategy for the product")]
+            [property: Description("Go-to-market strategy for the product, or null to use default")]
             MarketStrategy? Strategy = MarketStrategy.B2C,
 
-            [property: Description("Number of team members currently in the company")]
+            [property: Description("Number of team members as an integer, or null if unknown")]
             int? TeamSize = null,
 
-            [property: Description("Expected annual revenue in first year (USD)")]
+            [property: Description("Expected annual revenue in first year as a number in USD, or null if not yet projected")]
             double? ProjectedRevenue = null,
 
-            [property: Description("Brief description of the main product or service")]
+            [property: Description("Brief description of the main product or service, or null if not provided")]
             string? ProductDescription = null
         );
 

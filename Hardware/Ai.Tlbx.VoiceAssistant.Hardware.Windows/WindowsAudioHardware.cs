@@ -1,6 +1,7 @@
 using Ai.Tlbx.VoiceAssistant.Interfaces;
 using Ai.Tlbx.VoiceAssistant.Models;
 using NAudio.Wave;
+using System.Threading.Channels;
 
 namespace Ai.Tlbx.VoiceAssistant.Hardware.Windows
 {
@@ -8,7 +9,7 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Windows
     {
         private WaveInEvent? _waveIn;
         private bool _isRecording;
-        private CancellationTokenSource? _cancellationTokenSource;
+        private CancellationTokenSource? _recordingCts;
         private readonly int _sampleRate;
         private readonly int _channelCount;
         private readonly int _bitsPerSample;
@@ -16,9 +17,21 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Windows
         private BufferedWaveProvider? _bufferedWaveProvider;
         private MicrophoneAudioReceivedEventHandler? _audioDataReceivedHandler;
         private bool _isInitialized = false;
-        private int _selectedDeviceNumber = 0; // Default to first device
+        private int _selectedDeviceNumber = 0;
         private DiagnosticLevel _diagnosticLevel = DiagnosticLevel.Basic;
         private Action<LogLevel, string>? _logAction;
+
+        // Channel-based audio queue (learning from Web implementation)
+        private readonly Channel<(string Audio, int SampleRate)> _audioChannel;
+        private Task? _audioProcessorTask;
+        private CancellationTokenSource? _audioProcessorCts;
+        private bool _playbackSessionLogged = false;
+        private bool _isPlayingAudio = false;
+
+        // Mic test support
+        private bool _isMicTesting = false;
+        private WaveInEvent? _micTestWaveIn;
+        private Action<string>? _micTestCallback;
 
         public event EventHandler<string>? AudioError;
 
@@ -28,25 +41,20 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Windows
             _channelCount = channelCount;
             _bitsPerSample = bitsPerSample;
             _isRecording = false;
+
+            // Unbounded channel ensures we never block on write, single reader for ordering
+            _audioChannel = Channel.CreateUnbounded<(string, int)>(
+                new UnboundedChannelOptions { SingleReader = true });
         }
 
-        /// <summary>
-        /// Sets the logging action for this hardware component.
-        /// </summary>
-        /// <param name="logAction">Action to be called with log level and message.</param>
         public void SetLogAction(Action<LogLevel, string> logAction)
         {
             _logAction = logAction;
         }
 
-        /// <summary>
-        /// Logs a message with the specified log level.
-        /// </summary>
-        /// <param name="level">The log level.</param>
-        /// <param name="message">The message to log.</param>
         private void Log(LogLevel level, string message)
         {
-            _logAction?.Invoke(level, $"[WindowsAudioHardware] {message}");
+            _logAction?.Invoke(level, $"[WindowsAudio] {message}");
         }
 
         public Task InitAudio()
@@ -69,37 +77,91 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Windows
                     return Task.CompletedTask;
                 }
 
-                Log(LogLevel.Info, $"Found {deviceCount} input devices:");
-                for (int i = 0; i < deviceCount; i++)
-                {
-                    var capabilities = WaveInEvent.GetCapabilities(i);
-                    Log(LogLevel.Info, $"Device {i}: {capabilities.ProductName}");
-                }
+                Log(LogLevel.Info, $"Found {deviceCount} input devices");
 
                 _waveOut = new WaveOutEvent();
                 _bufferedWaveProvider = new BufferedWaveProvider(new WaveFormat(_sampleRate, _bitsPerSample, _channelCount))
                 {
-                    DiscardOnBufferOverflow = true
+                    DiscardOnBufferOverflow = true,
+                    BufferDuration = TimeSpan.FromSeconds(5)
                 };
                 _waveOut.Init(_bufferedWaveProvider);
 
+                // Start the audio processor task (single consumer for the channel)
+                StartAudioProcessor();
+
                 _isInitialized = true;
-                Log(LogLevel.Info, "Windows audio hardware initialized successfully");
+                Log(LogLevel.Info, "Windows audio hardware initialized");
             }
             catch (Exception ex)
             {
                 string error = $"Error initializing audio: {ex.Message}";
-                Log(LogLevel.Error, $"{error}\nStackTrace: {ex.StackTrace}");
+                Log(LogLevel.Error, error);
                 AudioError?.Invoke(this, error);
             }
             return Task.CompletedTask;
+        }
+
+        private void StartAudioProcessor()
+        {
+            if (_audioProcessorTask != null)
+                return;
+
+            _audioProcessorCts = new CancellationTokenSource();
+            _audioProcessorTask = ProcessAudioChannelAsync(_audioProcessorCts.Token);
+            Log(LogLevel.Info, "Audio processor task started");
+        }
+
+        private async Task ProcessAudioChannelAsync(CancellationToken ct)
+        {
+            try
+            {
+                await foreach (var (audio, sampleRate) in _audioChannel.Reader.ReadAllAsync(ct))
+                {
+                    if (!_playbackSessionLogged)
+                    {
+                        Log(LogLevel.Info, "Audio playback session started");
+                        _playbackSessionLogged = true;
+                    }
+
+                    try
+                    {
+                        byte[] audioData = Convert.FromBase64String(audio);
+
+                        if (_bufferedWaveProvider != null)
+                        {
+                            _bufferedWaveProvider.AddSamples(audioData, 0, audioData.Length);
+                        }
+
+                        if (_waveOut?.PlaybackState != PlaybackState.Playing)
+                        {
+                            _waveOut?.Play();
+                            _isPlayingAudio = true;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Log(LogLevel.Error, $"Error playing audio chunk: {ex.Message}");
+                        AudioError?.Invoke(this, $"Error playing audio: {ex.Message}");
+                    }
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                // Normal cancellation during shutdown
+            }
+            catch (Exception ex)
+            {
+                Log(LogLevel.Error, $"Audio processor error: {ex.Message}");
+            }
+
+            Log(LogLevel.Info, "Audio processor task stopped");
         }
 
         public async Task<bool> StartRecordingAudio(MicrophoneAudioReceivedEventHandler audioDataReceivedHandler)
         {
             if (_isRecording)
             {
-                await Task.CompletedTask;
                 return true;
             }
 
@@ -114,14 +176,13 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Windows
                     }
                 }
 
-                Log(LogLevel.Info, "Starting audio recording with parameters:");
-                Log(LogLevel.Info, $"  Sample rate: {_sampleRate}");
-                Log(LogLevel.Info, $"  Channel count: {_channelCount}");
-                Log(LogLevel.Info, $"  Bits per sample: {_bitsPerSample}");
-                Log(LogLevel.Info, $"  Device number: {_selectedDeviceNumber}");
+                // Reset playback session logging for new recording session
+                _playbackSessionLogged = false;
+
+                Log(LogLevel.Info, $"Starting audio recording (device: {_selectedDeviceNumber}, rate: {_sampleRate})");
 
                 _audioDataReceivedHandler = audioDataReceivedHandler;
-                _cancellationTokenSource = new CancellationTokenSource();
+                _recordingCts = new CancellationTokenSource();
 
                 _waveIn = new WaveInEvent
                 {
@@ -143,13 +204,13 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Windows
                 _waveIn.StartRecording();
                 _isRecording = true;
 
-                Log(LogLevel.Info, "Recording started successfully");
+                Log(LogLevel.Info, "Recording started");
                 return true;
             }
             catch (Exception ex)
             {
                 string error = $"Error starting recording: {ex.Message}";
-                Log(LogLevel.Error, $"{error}\nStackTrace: {ex.StackTrace}");
+                Log(LogLevel.Error, error);
                 AudioError?.Invoke(this, error);
                 return false;
             }
@@ -174,20 +235,20 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Windows
                     _waveIn = null;
                 }
 
-                _cancellationTokenSource?.Cancel();
-                _cancellationTokenSource?.Dispose();
-                _cancellationTokenSource = null;
+                _recordingCts?.Cancel();
+                _recordingCts?.Dispose();
+                _recordingCts = null;
 
                 _isRecording = false;
                 _audioDataReceivedHandler = null;
 
-                Log(LogLevel.Info, "Recording stopped successfully");
+                Log(LogLevel.Info, "Recording stopped");
                 return Task.FromResult(true);
             }
             catch (Exception ex)
             {
                 string error = $"Error stopping recording: {ex.Message}";
-                Log(LogLevel.Error, $"{error}\nStackTrace: {ex.StackTrace}");
+                Log(LogLevel.Error, error);
                 AudioError?.Invoke(this, error);
                 return Task.FromResult(false);
             }
@@ -195,50 +256,48 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Windows
 
         public bool PlayAudio(string base64EncodedPcm16Audio, int sampleRate)
         {
-            try
+            if (string.IsNullOrEmpty(base64EncodedPcm16Audio))
             {
-                if (string.IsNullOrEmpty(base64EncodedPcm16Audio))
-                {
-                    Log(LogLevel.Warn, "Warning: Attempted to play empty audio data");
-                    return false;
-                }
-
-                byte[] audioData = Convert.FromBase64String(base64EncodedPcm16Audio);
-                if (_bufferedWaveProvider != null)
-                {
-                    _bufferedWaveProvider.AddSamples(audioData, 0, audioData.Length);
-                }
-
-                if (_waveOut?.PlaybackState != PlaybackState.Playing)
-                {
-                    _waveOut?.Play();
-                }
-
-                return true;
-            }
-            catch (Exception ex)
-            {
-                string error = $"Error playing audio: {ex.Message}";
-                Log(LogLevel.Error, $"{error}\nStackTrace: {ex.StackTrace}");
-                AudioError?.Invoke(this, error);
                 return false;
             }
+
+            // Non-blocking write to channel - processor task handles playback
+            return _audioChannel.Writer.TryWrite((base64EncodedPcm16Audio, sampleRate));
         }
 
         public async Task ClearAudioQueue()
         {
             try
             {
-                Log(LogLevel.Info, "Clearing audio buffer...");                
+                // Drain the channel first
+                int queuedItems = 0;
+                while (_audioChannel.Reader.TryRead(out _))
+                {
+                    queuedItems++;
+                }
+
+                _playbackSessionLogged = false;
+
+                if (queuedItems > 0)
+                {
+                    Log(LogLevel.Info, $"Drained {queuedItems} items from audio queue");
+                }
+
+                // Clear the buffer and stop playback
                 int bufferSizeBeforeClear = _bufferedWaveProvider?.BufferedBytes ?? 0;
                 _bufferedWaveProvider?.ClearBuffer();
                 _waveOut?.Stop();
-                Log(LogLevel.Info, $"Audio buffer cleared. Bytes before clear: {bufferSizeBeforeClear}");
+                _isPlayingAudio = false;
+
+                if (bufferSizeBeforeClear > 0)
+                {
+                    Log(LogLevel.Info, $"Cleared {bufferSizeBeforeClear} bytes from buffer");
+                }
             }
             catch (Exception ex)
             {
                 string error = $"Error clearing audio buffer: {ex.Message}";
-                Log(LogLevel.Error, $"{error}\nStackTrace: {ex.StackTrace}");
+                Log(LogLevel.Error, error);
                 AudioError?.Invoke(this, error);
             }
             await Task.CompletedTask;
@@ -257,15 +316,13 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Windows
                     }
 
                     string base64Audio = Convert.ToBase64String(buffer);
-                    Log(LogLevel.Info, $"Audio data recorded: {e.BytesRecorded} bytes, base64 length: {base64Audio.Length}");
-
                     _audioDataReceivedHandler?.Invoke(this, new MicrophoneAudioReceivedEventArgs(base64Audio));
                 }
             }
             catch (Exception ex)
             {
                 string error = $"Error processing audio data: {ex.Message}";
-                Log(LogLevel.Error, $"{error}\nStackTrace: {ex.StackTrace}");
+                Log(LogLevel.Error, error);
                 AudioError?.Invoke(this, error);
             }
         }
@@ -282,7 +339,7 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Windows
                 }
 
                 int deviceCount = WaveInEvent.DeviceCount;
-                Log(LogLevel.Info, $"Getting available microphones. Found {deviceCount} devices.");
+                Log(LogLevel.Info, $"Found {deviceCount} microphone devices");
 
                 for (int i = 0; i < deviceCount; i++)
                 {
@@ -291,24 +348,21 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Windows
                     {
                         Id = i.ToString(),
                         Name = capabilities.ProductName,
-                        IsDefault = i == 0 // Assume first device is default
+                        IsDefault = i == 0
                     });
-                    Log(LogLevel.Info, $"Device {i}: {capabilities.ProductName}");
                 }
             }
             catch (Exception ex)
             {
                 string error = $"Error getting available microphones: {ex.Message}";
-                Log(LogLevel.Error, $"{error}\nStackTrace: {ex.StackTrace}");
+                Log(LogLevel.Error, error);
                 AudioError?.Invoke(this, error);
             }
-            await Task.CompletedTask;
             return result;
         }
 
         public async Task<List<AudioDeviceInfo>> RequestMicrophonePermissionAndGetDevices()
         {
-            // On Windows, this is the same as GetAvailableMicrophones() since Windows doesn't have web-style permission prompts
             return await GetAvailableMicrophones();
         }
 
@@ -326,19 +380,19 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Windows
                     if (deviceNumber >= 0 && deviceNumber < WaveInEvent.DeviceCount)
                     {
                         _selectedDeviceNumber = deviceNumber;
-                        Log(LogLevel.Info, $"Microphone device set to: {deviceNumber}");
+                        Log(LogLevel.Info, $"Microphone set to device {deviceNumber}");
                         return true;
                     }
                     else
                     {
-                        string error = $"Invalid device number: {deviceNumber}. Must be between 0 and {WaveInEvent.DeviceCount - 1}";
+                        string error = $"Invalid device number: {deviceNumber}";
                         Log(LogLevel.Error, error);
                         AudioError?.Invoke(this, error);
                     }
                 }
                 else
                 {
-                    string error = $"Invalid device ID format: {deviceId}. Must be a number.";
+                    string error = $"Invalid device ID format: {deviceId}";
                     Log(LogLevel.Error, error);
                     AudioError?.Invoke(this, error);
                 }
@@ -346,10 +400,9 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Windows
             catch (Exception ex)
             {
                 string error = $"Error setting microphone device: {ex.Message}";
-                Log(LogLevel.Error, $"{error}\nStackTrace: {ex.StackTrace}");
+                Log(LogLevel.Error, error);
                 AudioError?.Invoke(this, error);
             }
-            await Task.CompletedTask;
             return false;
         }
 
@@ -358,19 +411,199 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Windows
             return Task.FromResult<string?>(_selectedDeviceNumber.ToString());
         }
 
+        /// <summary>
+        /// Starts a microphone test that loops audio back through the speakers.
+        /// </summary>
+        /// <param name="callback">Optional callback for each audio chunk (base64 encoded).</param>
+        public async Task<bool> StartMicTest(Action<string>? callback = null)
+        {
+            if (_isMicTesting)
+            {
+                Log(LogLevel.Warn, "Mic test already running");
+                return true;
+            }
+
+            try
+            {
+                if (!_isInitialized)
+                {
+                    await InitAudio();
+                }
+
+                Log(LogLevel.Info, "Starting mic test loopback");
+                _isMicTesting = true;
+                _micTestCallback = callback;
+
+                _micTestWaveIn = new WaveInEvent
+                {
+                    DeviceNumber = _selectedDeviceNumber,
+                    WaveFormat = new WaveFormat(_sampleRate, _bitsPerSample, _channelCount),
+                    BufferMilliseconds = 50
+                };
+
+                _micTestWaveIn.DataAvailable += OnMicTestDataAvailable;
+                _micTestWaveIn.StartRecording();
+
+                Log(LogLevel.Info, "Mic test started - speak to hear yourself");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Log(LogLevel.Error, $"Mic test start failed: {ex.Message}");
+                _isMicTesting = false;
+                return false;
+            }
+        }
+
+        private void OnMicTestDataAvailable(object? sender, WaveInEventArgs? e)
+        {
+            if (!_isMicTesting || e == null || e.BytesRecorded <= 0 || e.Buffer == null)
+                return;
+
+            try
+            {
+                // Loop back to speakers
+                _bufferedWaveProvider?.AddSamples(e.Buffer, 0, e.BytesRecorded);
+
+                if (_waveOut?.PlaybackState != PlaybackState.Playing)
+                {
+                    _waveOut?.Play();
+                }
+
+                // Optional callback
+                if (_micTestCallback != null)
+                {
+                    string base64 = Convert.ToBase64String(e.Buffer, 0, e.BytesRecorded);
+                    _micTestCallback(base64);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log(LogLevel.Error, $"Mic test data error: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Stops the microphone test.
+        /// </summary>
+        public Task StopMicTest()
+        {
+            if (!_isMicTesting)
+            {
+                return Task.CompletedTask;
+            }
+
+            Log(LogLevel.Info, "Stopping mic test");
+            _isMicTesting = false;
+            _micTestCallback = null;
+
+            if (_micTestWaveIn != null)
+            {
+                _micTestWaveIn.StopRecording();
+                _micTestWaveIn.DataAvailable -= OnMicTestDataAvailable;
+                _micTestWaveIn.Dispose();
+                _micTestWaveIn = null;
+            }
+
+            // Clear buffer and stop playback
+            _bufferedWaveProvider?.ClearBuffer();
+            _waveOut?.Stop();
+
+            Log(LogLevel.Info, "Mic test stopped");
+            return Task.CompletedTask;
+        }
+
+        /// <summary>
+        /// Returns true if a mic test is currently running.
+        /// </summary>
+        public bool IsMicTesting => _isMicTesting;
+
+        /// <summary>
+        /// Returns true if audio is currently being played back.
+        /// </summary>
+        public bool IsPlayingAudio => _isPlayingAudio;
+
+        /// <summary>
+        /// Waits until all queued audio has been played back.
+        /// </summary>
+        /// <param name="timeout">Maximum time to wait.</param>
+        /// <returns>True if playback completed, false if timed out.</returns>
+        public async Task<bool> WaitForPlaybackDrainAsync(TimeSpan? timeout = null)
+        {
+            var maxWait = timeout ?? TimeSpan.FromSeconds(30);
+            var startTime = DateTime.UtcNow;
+
+            // Wait for channel to drain (TryPeek returns false when empty)
+            while (_audioChannel.Reader.TryPeek(out _))
+            {
+                if (DateTime.UtcNow - startTime > maxWait)
+                {
+                    Log(LogLevel.Warn, "WaitForPlaybackDrain timed out waiting for channel");
+                    return false;
+                }
+                await Task.Delay(50);
+            }
+
+            // Wait for buffer to drain
+            while (_bufferedWaveProvider?.BufferedBytes > 0)
+            {
+                if (DateTime.UtcNow - startTime > maxWait)
+                {
+                    Log(LogLevel.Warn, "WaitForPlaybackDrain timed out waiting for buffer");
+                    return false;
+                }
+                await Task.Delay(50);
+            }
+
+            // Small grace period for audio hardware to finish
+            await Task.Delay(100);
+
+            Log(LogLevel.Info, $"Playback drain complete after {(DateTime.UtcNow - startTime).TotalMilliseconds:F0}ms");
+            return true;
+        }
+
         public async ValueTask DisposeAsync()
         {
             try
             {
                 Log(LogLevel.Info, "Disposing Windows audio hardware...");
+
+                // Stop mic test if running
+                await StopMicTest();
+
+                // Stop recording
                 await StopRecordingAudio();
+
+                // Stop the audio processor task
+                if (_audioProcessorCts != null)
+                {
+                    _audioProcessorCts.Cancel();
+
+                    if (_audioProcessorTask != null)
+                    {
+                        try
+                        {
+                            await _audioProcessorTask;
+                        }
+                        catch
+                        {
+                            // Task cancellation expected
+                        }
+                    }
+
+                    _audioProcessorCts.Dispose();
+                    _audioProcessorCts = null;
+                    _audioProcessorTask = null;
+                }
+
+                // Clear audio queue
+                while (_audioChannel.Reader.TryRead(out _)) { }
 
                 if (_waveOut != null)
                 {
                     _waveOut.Stop();
                     _waveOut.Dispose();
                     _waveOut = null;
-                    Log(LogLevel.Info, "Wave out player disposed");
                 }
 
                 _bufferedWaveProvider = null;
@@ -409,38 +642,18 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Windows
             }
         }
 
-        /// <summary>
-        /// Sets the diagnostic logging level for the Windows audio device.
-        /// </summary>
-        /// <param name="level">The diagnostic level to set.</param>
-        /// <returns>A task that resolves to true if the level was set successfully, false otherwise.</returns>
         public async Task<bool> SetDiagnosticLevel(DiagnosticLevel level)
         {
             await Task.CompletedTask;
             _diagnosticLevel = level;
-            LogDiagnostic($"Diagnostic level set to: {level}");
+            Log(LogLevel.Info, $"Diagnostic level set to: {level}");
             return true;
         }
 
-        /// <summary>
-        /// Gets the current diagnostic logging level.
-        /// </summary>
-        /// <returns>The current diagnostic level.</returns>
         public async Task<DiagnosticLevel> GetDiagnosticLevel()
         {
             await Task.CompletedTask;
             return _diagnosticLevel;
-        }
-
-        /// <summary>
-        /// Logs a diagnostic message respecting the diagnostic level setting.
-        /// </summary>
-        private void LogDiagnostic(string message)
-        {
-            if (_diagnosticLevel == DiagnosticLevel.None) return;
-            
-            // Windows implementation now uses centralized logging
-            Log(LogLevel.Info, message);
         }
     }
 }

@@ -36,6 +36,19 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.Google.Protocol
 
         [JsonPropertyName("realtimeInputConfig")]
         public RealtimeInputConfig? RealtimeInputConfig { get; set; }
+
+        [JsonPropertyName("proactivity")]
+        public ProactivityConfig? Proactivity { get; set; }
+    }
+
+    /// <summary>
+    /// Configuration for proactive model behavior.
+    /// When enabled, the model can intelligently decide when to respond.
+    /// </summary>
+    public class ProactivityConfig
+    {
+        [JsonPropertyName("proactiveAudio")]
+        public bool ProactiveAudio { get; set; }
     }
 
     public class GenerationConfig
@@ -135,6 +148,9 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.Google.Protocol
     {
         [JsonPropertyName("mediaChunks")]
         public List<MediaChunk>? MediaChunks { get; set; }
+
+        [JsonPropertyName("audioStreamEnd")]
+        public bool? AudioStreamEnd { get; set; }
     }
 
     public class MediaChunk
@@ -278,6 +294,9 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.Google.Protocol
 
         [JsonPropertyName("activityHandling")]
         public string? ActivityHandling { get; set; }
+
+        [JsonPropertyName("turnCoverage")]
+        public string? TurnCoverage { get; set; }
     }
 
     /// <summary>
