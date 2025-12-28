@@ -7,6 +7,7 @@ using Ai.Tlbx.VoiceAssistant.Models;
 using Ai.Tlbx.VoiceAssistant.Provider.OpenAi.Extensions;
 using Ai.Tlbx.VoiceAssistant.Provider.Google.Extensions;
 using Ai.Tlbx.VoiceAssistant.BuiltInTools;
+using Ai.Tlbx.VoiceAssistant.Demo.Web.Tools;
 using System;
 using System.Diagnostics;
 using Microsoft.AspNetCore.Builder;

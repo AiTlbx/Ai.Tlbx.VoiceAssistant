@@ -1,7 +1,8 @@
 using System.ComponentModel;
 using System.Threading.Tasks;
+using Ai.Tlbx.VoiceAssistant.BuiltInTools;
 
-namespace Ai.Tlbx.VoiceAssistant.BuiltInTools
+namespace Ai.Tlbx.VoiceAssistant.Demo.Web.Tools
 {
     public enum IndustryType
     {
