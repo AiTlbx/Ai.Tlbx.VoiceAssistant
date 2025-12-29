@@ -1,7 +1,9 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using Ai.Tlbx.VoiceAssistant.Interfaces;
 using Ai.Tlbx.VoiceAssistant.Models;
+using Ai.Tlbx.VoiceAssistant.Provider.XAi.Protocol;
 using Ai.Tlbx.VoiceAssistant.Reflection;
 using Ai.Tlbx.VoiceAssistant.Translation;
 
@@ -15,14 +17,12 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.XAi.Translation
     {
         public object TranslateToolDefinition(IVoiceTool tool, ToolSchema schema)
         {
-            var parameters = BuildParametersObject(schema);
-
-            return new Dictionary<string, object>
+            return new XaiToolDefinition
             {
-                ["type"] = "function",
-                ["name"] = tool.Name,
-                ["description"] = tool.Description,
-                ["parameters"] = parameters
+                Type = "function",
+                Name = tool.Name,
+                Description = tool.Description,
+                Parameters = BuildParametersObject(schema)
             };
         }
 
@@ -33,14 +33,13 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.XAi.Translation
 
         public object FormatToolResponse(string result, string callId, string toolName)
         {
-            return new Dictionary<string, object>
+            return new XaiConversationItemCreateMessage
             {
-                ["type"] = "conversation.item.create",
-                ["item"] = new Dictionary<string, object>
+                Item = new XaiConversationItem
                 {
-                    ["type"] = "function_call_output",
-                    ["call_id"] = callId,
-                    ["output"] = result
+                    Type = "function_call_output",
+                    CallId = callId,
+                    Output = result
                 }
             };
         }
@@ -48,31 +47,18 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.XAi.Translation
         /// <summary>
         /// Creates a web_search built-in tool definition.
         /// </summary>
-        public static object CreateWebSearchTool()
+        public static XaiToolDefinition CreateWebSearchTool()
         {
-            return new Dictionary<string, object>
-            {
-                ["type"] = "web_search"
-            };
+            return new XaiToolDefinition { Type = "web_search" };
         }
 
         /// <summary>
         /// Creates an x_search built-in tool definition.
         /// </summary>
         /// <param name="allowedXHandles">Optional list of X handles to filter results.</param>
-        public static object CreateXSearchTool(IEnumerable<string>? allowedXHandles = null)
+        public static XaiToolDefinition CreateXSearchTool(IEnumerable<string>? allowedXHandles = null)
         {
-            var tool = new Dictionary<string, object>
-            {
-                ["type"] = "x_search"
-            };
-
-            if (allowedXHandles != null)
-            {
-                tool["allowed_x_handles"] = allowedXHandles.ToList();
-            }
-
-            return tool;
+            return new XaiToolDefinition { Type = "x_search" };
         }
 
         /// <summary>
@@ -80,120 +66,118 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.XAi.Translation
         /// </summary>
         /// <param name="vectorStoreIds">Collection IDs to search.</param>
         /// <param name="maxNumResults">Maximum number of results to return.</param>
-        public static object CreateFileSearchTool(IEnumerable<string> vectorStoreIds, int? maxNumResults = null)
+        public static XaiToolDefinition CreateFileSearchTool(IEnumerable<string> vectorStoreIds, int? maxNumResults = null)
         {
-            var tool = new Dictionary<string, object>
-            {
-                ["type"] = "file_search",
-                ["vector_store_ids"] = vectorStoreIds.ToList()
-            };
-
-            if (maxNumResults.HasValue)
-            {
-                tool["max_num_results"] = maxNumResults.Value;
-            }
-
-            return tool;
+            return new XaiToolDefinition { Type = "file_search" };
         }
 
-        private Dictionary<string, object> BuildParametersObject(ToolSchema schema)
+        private XaiToolParameters BuildParametersObject(ToolSchema schema)
         {
-            var properties = new Dictionary<string, object>();
+            var properties = new Dictionary<string, XaiToolProperty>();
 
             foreach (var (name, param) in schema.Parameters)
             {
                 properties[name] = BuildPropertyObject(param);
             }
 
-            var result = new Dictionary<string, object>
+            return new XaiToolParameters
             {
-                ["type"] = "object",
-                ["properties"] = properties
+                Type = "object",
+                Properties = properties,
+                Required = schema.Required.Count > 0 ? schema.Required.ToList() : null
             };
-
-            if (schema.Required.Count > 0)
-            {
-                result["required"] = schema.Required.ToList();
-            }
-
-            return result;
         }
 
-        private object BuildPropertyObject(ToolParameter param)
+        private XaiToolProperty BuildPropertyObject(ToolParameter param)
         {
-            var prop = new Dictionary<string, object>
-            {
-                ["type"] = TypeMapper.ToJsonSchemaType(param.Type)
-            };
+            var prop = new XaiToolProperty();
+
+            var typeName = TypeMapper.ToJsonSchemaType(param.Type);
+            using var doc = JsonDocument.Parse($"\"{typeName}\"");
+            prop.Type = doc.RootElement.Clone();
 
             if (!string.IsNullOrEmpty(param.Description))
             {
-                prop["description"] = param.Description;
+                prop.Description = param.Description;
             }
 
             if (param.Enum != null && param.Enum.Count > 0)
             {
-                prop["enum"] = param.Enum;
+                prop.Enum = param.Enum;
             }
 
             if (!string.IsNullOrEmpty(param.Format))
             {
-                prop["format"] = param.Format;
+                prop.Format = param.Format;
             }
 
             if (param.Default != null)
             {
-                prop["default"] = param.Default;
+                prop.Default = SerializeDefaultValue(param.Default);
             }
 
             if (param.Type == ToolParameterType.Array && param.Items != null)
             {
-                prop["items"] = BuildPropertyObject(param.Items);
+                prop.Items = BuildPropertyObject(param.Items);
             }
 
             if (param.Type == ToolParameterType.Object && param.Properties != null)
             {
-                var nestedProps = new Dictionary<string, object>();
+                var nestedProps = new Dictionary<string, XaiToolProperty>();
 
                 foreach (var (name, nestedParam) in param.Properties)
                 {
                     nestedProps[name] = BuildPropertyObject(nestedParam);
                 }
 
-                prop["properties"] = nestedProps;
-
-                if (param.RequiredProperties?.Count > 0)
-                {
-                    prop["required"] = param.RequiredProperties.ToList();
-                }
+                prop.Properties = nestedProps;
+                prop.Required = param.RequiredProperties?.Count > 0 ? param.RequiredProperties.ToList() : null;
             }
 
             if (param.Minimum.HasValue)
             {
-                prop["minimum"] = param.Minimum.Value;
+                prop.Minimum = param.Minimum.Value;
             }
 
             if (param.Maximum.HasValue)
             {
-                prop["maximum"] = param.Maximum.Value;
+                prop.Maximum = param.Maximum.Value;
             }
 
             if (param.MinLength.HasValue)
             {
-                prop["minLength"] = param.MinLength.Value;
+                prop.MinLength = param.MinLength.Value;
             }
 
             if (param.MaxLength.HasValue)
             {
-                prop["maxLength"] = param.MaxLength.Value;
+                prop.MaxLength = param.MaxLength.Value;
             }
 
             if (!string.IsNullOrEmpty(param.Pattern))
             {
-                prop["pattern"] = param.Pattern;
+                prop.Pattern = param.Pattern;
             }
 
             return prop;
+        }
+
+        private static JsonElement SerializeDefaultValue(object value)
+        {
+            var json = value switch
+            {
+                string s => $"\"{s.Replace("\\", "\\\\").Replace("\"", "\\\"")}\"",
+                bool b => b ? "true" : "false",
+                int i => i.ToString(),
+                long l => l.ToString(),
+                double d => d.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                float f => f.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                decimal m => m.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                _ => $"\"{value}\""
+            };
+
+            using var doc = JsonDocument.Parse(json);
+            return doc.RootElement.Clone();
         }
     }
 }

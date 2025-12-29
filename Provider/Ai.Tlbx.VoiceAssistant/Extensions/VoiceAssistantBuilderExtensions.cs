@@ -1,5 +1,7 @@
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
+using Ai.Tlbx.VoiceAssistant.BuiltInTools;
 using Ai.Tlbx.VoiceAssistant.Configuration;
 using Ai.Tlbx.VoiceAssistant.Interfaces;
 using Microsoft.Extensions.DependencyInjection;
@@ -13,12 +15,13 @@ namespace Ai.Tlbx.VoiceAssistant.Extensions
     {
         /// <summary>
         /// Adds a voice tool with configuration options.
+        /// For AOT scenarios, use the overload with TArgs type parameter and call WithJsonTypeInfo.
         /// </summary>
         /// <typeparam name="TTool">The type of voice tool implementation.</typeparam>
         /// <param name="builder">The voice assistant builder.</param>
         /// <param name="configure">Optional configuration action for the tool.</param>
         /// <returns>The builder instance for method chaining.</returns>
-        public static VoiceAssistantBuilder AddTool<TTool>(
+        public static VoiceAssistantBuilder AddTool<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TTool>(
             this VoiceAssistantBuilder builder,
             Action<TTool>? configure = null)
             where TTool : class, IVoiceTool, new()
@@ -33,11 +36,45 @@ namespace Ai.Tlbx.VoiceAssistant.Extensions
         }
 
         /// <summary>
+        /// Adds a voice tool with AOT-compatible configuration support.
+        /// Returns a ToolRegistration that allows setting JsonTypeInfo for AOT scenarios.
+        /// </summary>
+        /// <typeparam name="TTool">The type of voice tool implementation.</typeparam>
+        /// <typeparam name="TArgs">The tool's argument type.</typeparam>
+        /// <param name="builder">The voice assistant builder.</param>
+        /// <returns>A ToolRegistration for fluent configuration.</returns>
+        /// <example>
+        /// <code>
+        /// // AOT usage:
+        /// builder.AddTool&lt;MyTool, MyTool.Args&gt;()
+        ///        .WithJsonTypeInfo(MyToolJsonContext.Default.Args);
+        ///
+        /// // Non-AOT usage (reflection fallback):
+        /// builder.AddTool&lt;MyTool, MyTool.Args&gt;();
+        /// </code>
+        /// </example>
+        public static ToolRegistration<TTool, TArgs> AddTool<
+            [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TTool,
+            [DynamicallyAccessedMembers(
+                DynamicallyAccessedMemberTypes.PublicConstructors |
+                DynamicallyAccessedMemberTypes.PublicProperties)] TArgs>(
+            this VoiceAssistantBuilder builder)
+            where TTool : VoiceToolBase<TArgs>, new()
+            where TArgs : notnull
+        {
+            var tool = new TTool();
+            builder.Services.AddSingleton<IVoiceTool>(tool);
+            return new ToolRegistration<TTool, TArgs>(tool, builder);
+        }
+
+        /// <summary>
         /// Adds multiple voice tools at once.
+        /// Note: This method is not AOT-safe. Use the generic AddTool method for AOT scenarios.
         /// </summary>
         /// <param name="builder">The voice assistant builder.</param>
         /// <param name="toolTypes">The types of voice tool implementations to add.</param>
         /// <returns>The builder instance for method chaining.</returns>
+        [RequiresUnreferencedCode("This method uses reflection to register tool types. For AOT scenarios, use the generic AddTool<T> method instead.")]
         public static VoiceAssistantBuilder AddTools(
             this VoiceAssistantBuilder builder,
             params Type[] toolTypes)

@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace Ai.Tlbx.VoiceAssistant.Provider.Google.Protocol
@@ -132,7 +133,43 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.Google.Protocol
         public string Description { get; set; } = string.Empty;
 
         [JsonPropertyName("parameters")]
-        public object? Parameters { get; set; }
+        public GoogleToolParameters? Parameters { get; set; }
+    }
+
+    public class GoogleToolParameters
+    {
+        [JsonPropertyName("type")]
+        public string Type { get; set; } = "object";
+
+        [JsonPropertyName("properties")]
+        public Dictionary<string, GoogleToolProperty>? Properties { get; set; }
+
+        [JsonPropertyName("required")]
+        public List<string>? Required { get; set; }
+    }
+
+    public class GoogleToolProperty
+    {
+        [JsonPropertyName("type")]
+        public string? Type { get; set; }
+
+        [JsonPropertyName("description")]
+        public string? Description { get; set; }
+
+        [JsonPropertyName("enum")]
+        public List<string>? Enum { get; set; }
+
+        [JsonPropertyName("format")]
+        public string? Format { get; set; }
+
+        [JsonPropertyName("items")]
+        public GoogleToolProperty? Items { get; set; }
+
+        [JsonPropertyName("properties")]
+        public Dictionary<string, GoogleToolProperty>? Properties { get; set; }
+
+        [JsonPropertyName("required")]
+        public List<string>? Required { get; set; }
     }
 
     /// <summary>

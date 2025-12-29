@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Reflection;
 using System.Text.RegularExpressions;
@@ -12,9 +13,16 @@ namespace Ai.Tlbx.VoiceAssistant.Reflection
     /// <summary>
     /// Infers ToolSchema from C# types using reflection.
     /// Schemas are cached for performance.
+    /// Note: For AOT scenarios, types must be preserved via DynamicallyAccessedMembers attributes.
     /// </summary>
+    [UnconditionalSuppressMessage("Trimming", "IL2067", Justification = "Types passed to InferSchema have DynamicallyAccessedMembers constraint")]
+    [UnconditionalSuppressMessage("Trimming", "IL2072", Justification = "Nested types inherit preservation from parent type with DynamicallyAccessedMembers")]
+    [UnconditionalSuppressMessage("Trimming", "IL2062", Justification = "Generic type arguments are preserved through parent type annotations")]
     public static class ToolSchemaInferrer
     {
+        private const DynamicallyAccessedMemberTypes RequiredMembers =
+            DynamicallyAccessedMemberTypes.PublicConstructors |
+            DynamicallyAccessedMemberTypes.PublicProperties;
         private static readonly ConcurrentDictionary<Type, ToolSchema> _cache = new();
 
         /// <summary>
@@ -23,7 +31,7 @@ namespace Ai.Tlbx.VoiceAssistant.Reflection
         /// </summary>
         /// <typeparam name="T">The type to infer schema from.</typeparam>
         /// <returns>The inferred ToolSchema.</returns>
-        public static ToolSchema InferSchema<T>() where T : notnull
+        public static ToolSchema InferSchema<[DynamicallyAccessedMembers(RequiredMembers)] T>() where T : notnull
         {
             return InferSchema(typeof(T));
         }
@@ -34,12 +42,12 @@ namespace Ai.Tlbx.VoiceAssistant.Reflection
         /// </summary>
         /// <param name="type">The type to infer schema from.</param>
         /// <returns>The inferred ToolSchema.</returns>
-        public static ToolSchema InferSchema(Type type)
+        public static ToolSchema InferSchema([DynamicallyAccessedMembers(RequiredMembers)] Type type)
         {
-            return _cache.GetOrAdd(type, BuildSchema);
+            return _cache.GetOrAdd(type, static t => BuildSchema(t));
         }
 
-        private static ToolSchema BuildSchema(Type type)
+        private static ToolSchema BuildSchema([DynamicallyAccessedMembers(RequiredMembers)] Type type)
         {
             var schema = new ToolSchema();
 
@@ -87,7 +95,7 @@ namespace Ai.Tlbx.VoiceAssistant.Reflection
             return schema;
         }
 
-        private static ToolParameter BuildParameter(Type type, object? memberInfo)
+        private static ToolParameter BuildParameter([DynamicallyAccessedMembers(RequiredMembers)] Type type, object? memberInfo)
         {
             var param = new ToolParameter
             {

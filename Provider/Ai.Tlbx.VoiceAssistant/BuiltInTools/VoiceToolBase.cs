@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Ai.Tlbx.VoiceAssistant.Interfaces;
@@ -14,9 +16,15 @@ namespace Ai.Tlbx.VoiceAssistant.BuiltInTools
     /// <summary>
     /// Base class for voice tools with automatic schema inference and type-safe execution.
     /// Users extend this class and implement ExecuteAsync with their Args type.
+    /// For AOT compatibility, call SetJsonTypeInfo with a source-generated JsonTypeInfo.
     /// </summary>
     /// <typeparam name="TArgs">The type representing the tool's parameters (typically a record).</typeparam>
-    public abstract class VoiceToolBase<TArgs> : IVoiceTool<TArgs>, IVoiceTool where TArgs : notnull
+    [UnconditionalSuppressMessage("AOT", "IL3050", Justification = "Reflection fallback is intentional for non-AOT scenarios. AOT users should call SetJsonTypeInfo.")]
+    [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = "Reflection fallback is intentional for non-AOT scenarios. AOT users should call SetJsonTypeInfo.")]
+    public abstract class VoiceToolBase<[DynamicallyAccessedMembers(
+        DynamicallyAccessedMemberTypes.PublicConstructors |
+        DynamicallyAccessedMemberTypes.PublicProperties)] TArgs>
+        : IVoiceTool<TArgs>, IVoiceTool where TArgs : notnull
     {
         private static readonly JsonSerializerOptions _jsonOptions = new()
         {
@@ -27,6 +35,13 @@ namespace Ai.Tlbx.VoiceAssistant.BuiltInTools
 
         private string? _name;
         private string? _description;
+        private JsonTypeInfo<TArgs>? _jsonTypeInfo;
+
+        /// <summary>
+        /// Sets the JsonTypeInfo for AOT-compatible deserialization.
+        /// Call this method with a source-generated context for AOT scenarios.
+        /// </summary>
+        public void SetJsonTypeInfo(JsonTypeInfo<TArgs> typeInfo) => _jsonTypeInfo = typeInfo;
 
         /// <summary>
         /// Gets the name of the tool. Defaults to class name converted to snake_case.
@@ -43,6 +58,7 @@ namespace Ai.Tlbx.VoiceAssistant.BuiltInTools
         /// <summary>
         /// Gets the Type of TArgs for schema inference.
         /// </summary>
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors | DynamicallyAccessedMemberTypes.PublicProperties)]
         public Type ArgsType => typeof(TArgs);
 
         /// <summary>
@@ -93,7 +109,9 @@ namespace Ai.Tlbx.VoiceAssistant.BuiltInTools
                 }
                 else
                 {
-                    args = JsonSerializer.Deserialize<TArgs>(argumentsJson, _jsonOptions)!;
+                    args = _jsonTypeInfo != null
+                        ? JsonSerializer.Deserialize(argumentsJson, _jsonTypeInfo)!
+                        : JsonSerializer.Deserialize<TArgs>(argumentsJson, _jsonOptions)!;
                 }
 
                 if (args == null)
@@ -144,14 +162,14 @@ namespace Ai.Tlbx.VoiceAssistant.BuiltInTools
                                   ? $"Already provided:\n- {string.Join("\n- ", providedList)}"
                                   : "No parameters provided yet.");
 
-                return JsonSerializer.Serialize(new
+                var error = new ToolValidationError
                 {
-                    success = false,
-                    error = "missing_required_parameters",
-                    message,
-                    missing_parameters = missingParams.Select(p => p.Split(' ')[0]).ToList(),
-                    provided_parameters = providedList.Select(p => p.Split(' ')[0]).ToList()
-                }, _jsonOptions);
+                    Message = message,
+                    MissingParameters = missingParams.Select(p => p.Split(' ')[0]).ToList(),
+                    ProvidedParameters = providedList.Select(p => p.Split(' ')[0]).ToList()
+                };
+
+                return JsonSerializer.Serialize(error, ToolResultsJsonContext.Default.ToolValidationError);
             }
 
             return null;
@@ -221,14 +239,14 @@ namespace Ai.Tlbx.VoiceAssistant.BuiltInTools
             var message = $"Parameter '{paramName}' has wrong type. Expected: {expectedType}. " +
                           $"If the user hasn't provided a value, send null or ask the user for a valid {expectedType}.";
 
-            return JsonSerializer.Serialize(new
+            var error = new ToolTypeError
             {
-                success = false,
-                error = "invalid_parameter_type",
-                message,
-                parameter = paramName,
-                expected_type = expectedType
-            }, _jsonOptions);
+                Message = message,
+                Parameter = paramName,
+                ExpectedType = expectedType
+            };
+
+            return JsonSerializer.Serialize(error, ToolResultsJsonContext.Default.ToolTypeError);
         }
 
         private static string GetFriendlyTypeName(Type type)
@@ -269,20 +287,13 @@ namespace Ai.Tlbx.VoiceAssistant.BuiltInTools
             return Activator.CreateInstance<TArgs>();
         }
 
-        /// <summary>
-        /// Creates a successful result with data.
-        /// </summary>
-        protected string CreateSuccessResult(object data)
-        {
-            return JsonSerializer.Serialize(new { success = true, data }, _jsonOptions);
-        }
 
         /// <summary>
         /// Creates an error result.
         /// </summary>
         protected string CreateErrorResult(string error)
         {
-            return JsonSerializer.Serialize(new { success = false, error }, _jsonOptions);
+            return JsonSerializer.Serialize(new ToolErrorResult(error), ToolResultsJsonContext.Default.ToolErrorResult);
         }
 
         private string GetDescriptionFromAttribute()

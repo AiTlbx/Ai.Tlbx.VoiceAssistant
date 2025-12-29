@@ -1,5 +1,6 @@
 using System;
 using System.ComponentModel;
+using System.Text.Json;
 using System.Threading.Tasks;
 
 namespace Ai.Tlbx.VoiceAssistant.BuiltInTools
@@ -54,16 +55,16 @@ namespace Ai.Tlbx.VoiceAssistant.BuiltInTools
                     return Task.FromResult(CreateErrorResult("Result is infinity"));
                 }
 
-                var response = new
+                var response = new ToolSuccessResult<CalculatorResult>(new CalculatorResult
                 {
-                    operation = args.Operation.ToString().ToLowerInvariant(),
-                    a = args.A,
-                    b = args.B,
-                    result = result,
-                    expression = $"{args.A} {GetOperatorSymbol(args.Operation)} {args.B} = {result}"
-                };
+                    Operation = args.Operation.ToString().ToLowerInvariant(),
+                    A = args.A,
+                    B = args.B,
+                    Result = result,
+                    Expression = $"{args.A} {GetOperatorSymbol(args.Operation)} {args.B} = {result}"
+                });
 
-                return Task.FromResult(CreateSuccessResult(response));
+                return Task.FromResult(JsonSerializer.Serialize(response, ToolResultsJsonContext.Default.ToolSuccessResultCalculatorResult));
             }
             catch (Exception ex)
             {

@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Threading.Tasks;
 
 namespace Ai.Tlbx.VoiceAssistant.Interfaces
@@ -41,6 +42,7 @@ namespace Ai.Tlbx.VoiceAssistant.Interfaces
         /// Gets the Type of the TArgs used by this tool.
         /// Used by the schema inferrer to build the parameter schema.
         /// </summary>
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors | DynamicallyAccessedMemberTypes.PublicProperties)]
         Type ArgsType { get; }
 
         /// <summary>

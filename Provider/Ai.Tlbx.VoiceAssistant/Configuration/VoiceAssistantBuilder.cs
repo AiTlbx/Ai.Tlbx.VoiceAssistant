@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Ai.Tlbx.VoiceAssistant.Interfaces;
 using Ai.Tlbx.VoiceAssistant.Models;
 using Microsoft.Extensions.DependencyInjection;
@@ -26,7 +27,7 @@ namespace Ai.Tlbx.VoiceAssistant.Configuration
         /// </summary>
         /// <typeparam name="THardware">The type of audio hardware access implementation.</typeparam>
         /// <returns>The builder instance for method chaining.</returns>
-        public VoiceAssistantBuilder WithHardware<THardware>()
+        public VoiceAssistantBuilder WithHardware<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] THardware>()
             where THardware : class, IAudioHardwareAccess
         {
             _services.AddScoped<IAudioHardwareAccess, THardware>();
@@ -38,7 +39,7 @@ namespace Ai.Tlbx.VoiceAssistant.Configuration
         /// </summary>
         /// <typeparam name="TProvider">The type of voice provider implementation.</typeparam>
         /// <returns>The builder instance for method chaining.</returns>
-        public VoiceAssistantBuilder WithProvider<TProvider>()
+        public VoiceAssistantBuilder WithProvider<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TProvider>()
             where TProvider : class, IVoiceProvider
         {
             _services.AddScoped<IVoiceProvider, TProvider>();
@@ -50,7 +51,7 @@ namespace Ai.Tlbx.VoiceAssistant.Configuration
         /// </summary>
         /// <typeparam name="TTool">The type of voice tool implementation.</typeparam>
         /// <returns>The builder instance for method chaining.</returns>
-        public VoiceAssistantBuilder AddTool<TTool>()
+        public VoiceAssistantBuilder AddTool<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TTool>()
             where TTool : class, IVoiceTool
         {
             _services.AddTransient<IVoiceTool, TTool>();

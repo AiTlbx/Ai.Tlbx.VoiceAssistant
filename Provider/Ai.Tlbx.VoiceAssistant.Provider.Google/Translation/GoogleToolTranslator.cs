@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Ai.Tlbx.VoiceAssistant.Interfaces;
 using Ai.Tlbx.VoiceAssistant.Models;
+using Ai.Tlbx.VoiceAssistant.Provider.Google.Protocol;
 using Ai.Tlbx.VoiceAssistant.Reflection;
 using Ai.Tlbx.VoiceAssistant.Translation;
 
@@ -15,46 +16,41 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.Google.Translation
     {
         public object TranslateToolDefinition(IVoiceTool tool, ToolSchema schema)
         {
-            var parameters = BuildParametersObject(schema);
-
-            return new Dictionary<string, object>
+            return new FunctionDeclaration
             {
-                ["name"] = tool.Name,
-                ["description"] = tool.Description,
-                ["parameters"] = parameters
+                Name = tool.Name,
+                Description = tool.Description,
+                Parameters = BuildParametersObject(schema)
             };
         }
 
         public object TranslateTools(IEnumerable<(IVoiceTool Tool, ToolSchema Schema)> tools)
         {
             var functionDeclarations = tools
-                .Select(t => TranslateToolDefinition(t.Tool, t.Schema))
+                .Select(t => (FunctionDeclaration)TranslateToolDefinition(t.Tool, t.Schema))
                 .ToList();
 
-            return new List<object>
+            return new List<Tool>
             {
-                new Dictionary<string, object>
-                {
-                    ["functionDeclarations"] = functionDeclarations
-                }
+                new Tool { FunctionDeclarations = functionDeclarations }
             };
         }
 
         public object FormatToolResponse(string result, string callId, string toolName)
         {
-            return new Dictionary<string, object>
+            return new ToolResponseMessage
             {
-                ["toolResponse"] = new Dictionary<string, object>
+                ToolResponse = new ToolResponse
                 {
-                    ["functionResponses"] = new List<object>
+                    FunctionResponses = new List<FunctionResponse>
                     {
-                        new Dictionary<string, object>
+                        new FunctionResponse
                         {
-                            ["id"] = callId,
-                            ["name"] = toolName,
-                            ["response"] = new Dictionary<string, object>
+                            Id = callId,
+                            Name = toolName,
+                            Response = new FunctionResponseData
                             {
-                                ["result"] = result
+                                Result = result
                             }
                         }
                     }
@@ -62,70 +58,64 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.Google.Translation
             };
         }
 
-        private Dictionary<string, object> BuildParametersObject(ToolSchema schema)
+        private GoogleToolParameters BuildParametersObject(ToolSchema schema)
         {
-            var properties = new Dictionary<string, object>();
+            var properties = new Dictionary<string, GoogleToolProperty>();
 
             foreach (var (name, param) in schema.Parameters)
             {
                 properties[name] = BuildPropertyObject(param);
             }
 
-            var result = new Dictionary<string, object>
+            return new GoogleToolParameters
             {
-                ["type"] = "object",
-                ["properties"] = properties
+                Type = "object",
+                Properties = properties,
+                Required = schema.Required.Count > 0 ? schema.Required.ToList() : null
             };
-
-            if (schema.Required.Count > 0)
-            {
-                result["required"] = schema.Required.ToList();
-            }
-
-            return result;
         }
 
-        private object BuildPropertyObject(ToolParameter param)
+        private GoogleToolProperty BuildPropertyObject(ToolParameter param)
         {
-            var prop = new Dictionary<string, object>
+            var prop = new GoogleToolProperty
             {
-                ["type"] = TypeMapper.ToJsonSchemaType(param.Type)
+                Type = TypeMapper.ToJsonSchemaType(param.Type)
             };
 
             if (!string.IsNullOrEmpty(param.Description))
             {
-                prop["description"] = param.Description;
+                prop.Description = param.Description;
             }
 
             if (param.Enum != null && param.Enum.Count > 0)
             {
-                prop["enum"] = param.Enum;
+                prop.Enum = param.Enum;
             }
 
             if (!string.IsNullOrEmpty(param.Format))
             {
-                prop["format"] = param.Format;
+                prop.Format = param.Format;
             }
 
             if (param.Type == ToolParameterType.Array && param.Items != null)
             {
-                prop["items"] = BuildPropertyObject(param.Items);
+                prop.Items = BuildPropertyObject(param.Items);
             }
 
             if (param.Type == ToolParameterType.Object && param.Properties != null)
             {
-                var nestedProps = new Dictionary<string, object>();
+                var nestedProps = new Dictionary<string, GoogleToolProperty>();
 
                 foreach (var (name, nestedParam) in param.Properties)
                 {
                     nestedProps[name] = BuildPropertyObject(nestedParam);
                 }
 
-                prop["properties"] = nestedProps;
+                prop.Properties = nestedProps;
 
                 if (param.RequiredProperties?.Count > 0)
                 {
-                    prop["required"] = param.RequiredProperties.ToList();
+                    prop.Required = param.RequiredProperties.ToList();
                 }
             }
 

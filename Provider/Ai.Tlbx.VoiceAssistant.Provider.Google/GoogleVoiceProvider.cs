@@ -395,8 +395,8 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.Google
                         }
                     },
                     Tools = _settings.Tools.Count > 0 ? ConvertToolsToGoogleFormat() : null,
-                    InputAudioTranscription = _settings.TranscriptionConfig.EnableInputTranscription ? new { } : null,
-                    OutputAudioTranscription = _settings.TranscriptionConfig.EnableOutputTranscription ? new { } : null,
+                    InputAudioTranscription = _settings.TranscriptionConfig.EnableInputTranscription ? new EmptyObject() : null,
+                    OutputAudioTranscription = _settings.TranscriptionConfig.EnableOutputTranscription ? new EmptyObject() : null,
                     RealtimeInputConfig = new RealtimeInputConfig
                     {
                         AutomaticActivityDetection = _settings.VoiceActivityDetection.AutomaticDetection ? new Protocol.AutomaticActivityDetection
@@ -429,14 +429,7 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.Google
             var functionDeclarations = _settings.Tools.Select(tool =>
             {
                 var schema = ToolSchemaInferrer.InferSchema(tool.ArgsType);
-                var translated = _toolTranslator.TranslateToolDefinition(tool, schema) as Dictionary<string, object>;
-
-                return new FunctionDeclaration
-                {
-                    Name = tool.Name,
-                    Description = tool.Description,
-                    Parameters = translated?["parameters"]
-                };
+                return (FunctionDeclaration)_toolTranslator.TranslateToolDefinition(tool, schema);
             }).ToList();
 
             return new List<Tool>
@@ -445,24 +438,31 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.Google
             };
         }
 
-        private async Task SendMessageAsync<T>(T message)
+        private Task SendMessageAsync(SetupMessage message) =>
+            SendJsonAsync(JsonSerializer.Serialize(message, GoogleJsonContext.Default.SetupMessage), nameof(SetupMessage));
+
+        private Task SendMessageAsync(RealtimeInputMessage message)
+        {
+            _audioTxCount++;
+            if (_audioTxCount % AUDIO_TX_LOG_INTERVAL == 1)
+            {
+                _logAction(LogLevel.Info, $"[AUDIO-TX] Sent {_audioTxCount} audio chunks to Google");
+            }
+            return SendJsonAsync(JsonSerializer.Serialize(message, GoogleJsonContext.Default.RealtimeInputMessage), null);
+        }
+
+        private Task SendMessageAsync(ClientContentMessage message) =>
+            SendJsonAsync(JsonSerializer.Serialize(message, GoogleJsonContext.Default.ClientContentMessage), nameof(ClientContentMessage));
+
+        private Task SendMessageAsync(ToolResponseMessage message) =>
+            SendJsonAsync(JsonSerializer.Serialize(message, GoogleJsonContext.Default.ToolResponseMessage), nameof(ToolResponseMessage));
+
+        private async Task SendJsonAsync(string json, string? messageType)
         {
             if (_webSocket?.State != WebSocketState.Open)
                 return;
 
-            var json = JsonSerializer.Serialize(message, new JsonSerializerOptions { DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull });
-
-            var messageType = typeof(T).Name;
-
-            if (messageType == "RealtimeInputMessage")
-            {
-                _audioTxCount++;
-                if (_audioTxCount % AUDIO_TX_LOG_INTERVAL == 1)
-                {
-                    _logAction(LogLevel.Info, $"[AUDIO-TX] Sent {_audioTxCount} audio chunks to Google");
-                }
-            }
-            else
+            if (messageType != null)
             {
                 var logMessage = json.Length > MESSAGE_LOG_TRUNCATE_LENGTH
                     ? json.Substring(0, MESSAGE_LOG_TRUNCATE_LENGTH) + "..."
@@ -738,7 +738,7 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.Google
                     try
                     {
                         var argsJson = functionCall.TryGetProperty("args", out var args)
-                            ? JsonSerializer.Serialize(args)
+                            ? args.GetRawText()
                             : "{}";
 
                         _logAction(LogLevel.Info, $"Executing tool: {name}");

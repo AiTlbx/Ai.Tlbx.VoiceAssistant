@@ -12,6 +12,7 @@ using Ai.Tlbx.VoiceAssistant.Interfaces;
 using Ai.Tlbx.VoiceAssistant.Models;
 using Ai.Tlbx.VoiceAssistant.Reflection;
 using Ai.Tlbx.VoiceAssistant.Provider.XAi.Models;
+using Ai.Tlbx.VoiceAssistant.Provider.XAi.Protocol;
 using Ai.Tlbx.VoiceAssistant.Provider.XAi.Translation;
 
 namespace Ai.Tlbx.VoiceAssistant.Provider.XAi
@@ -203,13 +204,8 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.XAi
 
             try
             {
-                var audioMessage = new
-                {
-                    type = "input_audio_buffer.append",
-                    audio = base64Audio
-                };
-
-                await SendMessageAsync(JsonSerializer.Serialize(audioMessage));
+                var audioMessage = new XaiAudioBufferAppendMessage { Audio = base64Audio };
+                await SendMessageAsync(JsonSerializer.Serialize(audioMessage, XaiJsonContext.Default.XaiAudioBufferAppendMessage));
             }
             catch (Exception ex)
             {
@@ -231,12 +227,8 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.XAi
 
             try
             {
-                var interruptMessage = new
-                {
-                    type = "response.cancel"
-                };
-
-                await SendMessageAsync(JsonSerializer.Serialize(interruptMessage));
+                var interruptMessage = new XaiResponseCancelMessage();
+                await SendMessageAsync(JsonSerializer.Serialize(interruptMessage, XaiJsonContext.Default.XaiResponseCancelMessage));
                 _logAction(LogLevel.Info, "Interrupt signal sent to xAI");
             }
             catch (Exception ex)
@@ -266,25 +258,24 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.XAi
                     if (message.Role == ChatMessage.ToolRole)
                         continue;
 
-                    var conversationItem = new
+                    var conversationItem = new XaiConversationItemCreateMessage
                     {
-                        type = "conversation.item.create",
-                        item = new
+                        Item = new XaiConversationItem
                         {
-                            type = "message",
-                            role = message.Role == ChatMessage.UserRole ? "user" : "assistant",
-                            content = new[]
+                            Type = "message",
+                            Role = message.Role == ChatMessage.UserRole ? "user" : "assistant",
+                            Content = new List<XaiContentPart>
                             {
-                                new
+                                new XaiContentPart
                                 {
-                                    type = message.Role == ChatMessage.UserRole ? "input_text" : "output_text",
-                                    text = message.Content
+                                    Type = message.Role == ChatMessage.UserRole ? "input_text" : "output_text",
+                                    Text = message.Content
                                 }
                             }
                         }
                     };
 
-                    await SendMessageAsync(JsonSerializer.Serialize(conversationItem));
+                    await SendMessageAsync(JsonSerializer.Serialize(conversationItem, XaiJsonContext.Default.XaiConversationItemCreateMessage));
                     await Task.Delay(50);
                 }
 
@@ -305,7 +296,7 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.XAi
             var voiceString = _settings.Voice.ToString();
             _logAction(LogLevel.Info, $"Configuring session with voice: {_settings.Voice} -> {voiceString}");
 
-            var tools = new List<object>();
+            var tools = new List<XaiToolDefinition>();
 
             if (_settings.EnableWebSearch)
             {
@@ -319,49 +310,44 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.XAi
 
             foreach (var tool in _settings.Tools)
             {
-                tools.Add(_toolTranslator.TranslateToolDefinition(tool, ToolSchemaInferrer.InferSchema(tool.ArgsType)));
+                tools.Add((XaiToolDefinition)_toolTranslator.TranslateToolDefinition(tool, ToolSchemaInferrer.InferSchema(tool.ArgsType)));
             }
 
-            var session = new Dictionary<string, object>
+            var sessionConfig = new XaiSessionUpdateMessage
             {
-                ["voice"] = voiceString,
-                ["instructions"] = _settings.Instructions,
-                ["tools"] = tools,
-                ["tool_choice"] = "auto",
-                ["audio"] = new
+                EventId = $"evt_{Guid.NewGuid()}",
+                Session = new XaiSessionConfig
                 {
-                    input = new
+                    Voice = voiceString,
+                    Instructions = _settings.Instructions,
+                    Tools = tools,
+                    ToolChoice = "auto",
+                    Audio = new XaiAudioConfig
                     {
-                        format = new
+                        Input = new XaiAudioEndpointConfig
                         {
-                            type = _settings.AudioFormatType,
-                            rate = _settings.AudioSampleRate
+                            Format = new XaiAudioFormatConfig
+                            {
+                                Type = _settings.AudioFormatType,
+                                Rate = _settings.AudioSampleRate
+                            }
+                        },
+                        Output = new XaiAudioEndpointConfig
+                        {
+                            Format = new XaiAudioFormatConfig
+                            {
+                                Type = _settings.AudioFormatType,
+                                Rate = _settings.AudioSampleRate
+                            }
                         }
                     },
-                    output = new
-                    {
-                        format = new
-                        {
-                            type = _settings.AudioFormatType,
-                            rate = _settings.AudioSampleRate
-                        }
-                    }
+                    TurnDetection = _settings.TurnDetection != null
+                        ? new XaiTurnDetectionConfig { Type = _settings.TurnDetection.Type }
+                        : null
                 }
             };
 
-            if (_settings.TurnDetection != null)
-            {
-                session["turn_detection"] = new { type = _settings.TurnDetection.Type };
-            }
-
-            var sessionConfig = new
-            {
-                event_id = $"evt_{Guid.NewGuid()}",
-                type = "session.update",
-                session = session
-            };
-
-            var jsonMessage = JsonSerializer.Serialize(sessionConfig, new JsonSerializerOptions { WriteIndented = true, DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull });
+            var jsonMessage = JsonSerializer.Serialize(sessionConfig, XaiJsonContextIndented.Default.XaiSessionUpdateMessage);
             _logAction(LogLevel.Info, $"Sending session config to xAI:\n{jsonMessage}");
             await SendMessageAsync(jsonMessage);
             _logAction(LogLevel.Info, "Session configuration sent to xAI");
@@ -589,26 +575,21 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.XAi
 
         private async Task SendToolResultAsync(string callId, string result)
         {
-            var toolResponse = new
+            var toolResponse = new XaiConversationItemCreateMessage
             {
-                type = "conversation.item.create",
-                item = new
+                Item = new XaiConversationItem
                 {
-                    type = "function_call_output",
-                    call_id = callId,
-                    output = result
+                    Type = "function_call_output",
+                    CallId = callId,
+                    Output = result
                 }
             };
 
-            await SendMessageAsync(JsonSerializer.Serialize(toolResponse));
+            await SendMessageAsync(JsonSerializer.Serialize(toolResponse, XaiJsonContext.Default.XaiConversationItemCreateMessage));
             _logAction(LogLevel.Info, $"Tool result sent for call {callId}");
 
-            var responseCreate = new
-            {
-                type = "response.create"
-            };
-
-            await SendMessageAsync(JsonSerializer.Serialize(responseCreate));
+            var responseCreate = new XaiResponseCreateMessage();
+            await SendMessageAsync(JsonSerializer.Serialize(responseCreate, XaiJsonContext.Default.XaiResponseCreateMessage));
             _logAction(LogLevel.Info, "Requested AI response after tool execution");
         }
 
@@ -727,10 +708,12 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.XAi
                 }
 
                 using var jsonDoc = JsonDocument.Parse(argumentsJson);
-                var formatted = JsonSerializer.Serialize(jsonDoc, new JsonSerializerOptions
+                using var stream = new MemoryStream();
+                using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true }))
                 {
-                    WriteIndented = true
-                });
+                    jsonDoc.RootElement.WriteTo(writer);
+                }
+                var formatted = Encoding.UTF8.GetString(stream.ToArray());
 
                 if (!formatted.Contains('\n') || formatted.Length < 50)
                 {

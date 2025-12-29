@@ -13,8 +13,8 @@ using Ai.Tlbx.VoiceAssistant.Interfaces;
 using Ai.Tlbx.VoiceAssistant.Models;
 using Ai.Tlbx.VoiceAssistant.Reflection;
 using Ai.Tlbx.VoiceAssistant.Provider.OpenAi.Models;
+using Ai.Tlbx.VoiceAssistant.Provider.OpenAi.Protocol;
 using Ai.Tlbx.VoiceAssistant.Provider.OpenAi.Translation;
-using System.Text.Json.Serialization;
 
 namespace Ai.Tlbx.VoiceAssistant.Provider.OpenAi
 {
@@ -111,24 +111,22 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.OpenAi
             httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _apiKey);
             
             // Create request with session configuration
-            var request = new
+            var request = new ClientSecretRequest
             {
-                expires_after = new 
-                { 
-                    anchor = "created_at", 
-                    seconds = 600  // 10 minutes
-                },
-                session = new
+                ExpiresAfter = new ExpiresAfter
                 {
-                    type = "realtime",
-                    model = _settings.Model.ToApiString(),
-                    instructions = _settings.Instructions
+                    Anchor = "created_at",
+                    Seconds = 600  // 10 minutes
+                },
+                Session = new SessionSpec
+                {
+                    Type = "realtime",
+                    Model = _settings.Model.ToApiString(),
+                    Instructions = _settings.Instructions
                 }
             };
-            
-            // Using model: {_settings.Model.ToApiString()}
-            
-            var json = JsonSerializer.Serialize(request);
+
+            var json = JsonSerializer.Serialize(request, OpenAiJsonContext.Default.ClientSecretRequest);
             var content = new StringContent(json, Encoding.UTF8, "application/json");
             
             var response = await httpClient.PostAsync(REALTIME_SESSION_ENDPOINT, content);
@@ -292,13 +290,8 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.OpenAi
 
             try
             {
-                var audioMessage = new
-                {
-                    type = "input_audio_buffer.append",
-                    audio = base64Audio
-                };
-
-                await SendMessageAsync(JsonSerializer.Serialize(audioMessage));
+                var audioMessage = new AudioBufferAppendMessage { Audio = base64Audio };
+                await SendMessageAsync(JsonSerializer.Serialize(audioMessage, OpenAiJsonContext.Default.AudioBufferAppendMessage));
             }
             catch (Exception ex)
             {
@@ -320,12 +313,8 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.OpenAi
 
             try
             {
-                var interruptMessage = new
-                {
-                    type = "response.cancel"
-                };
-
-                await SendMessageAsync(JsonSerializer.Serialize(interruptMessage));
+                var interruptMessage = new ResponseCancelMessage();
+                await SendMessageAsync(JsonSerializer.Serialize(interruptMessage, OpenAiJsonContext.Default.ResponseCancelMessage));
                 _logAction(LogLevel.Info, "Interrupt signal sent to OpenAI");
             }
             catch (Exception ex)
@@ -355,28 +344,26 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.OpenAi
                     // Skip tool messages as they need special handling
                     if (message.Role == ChatMessage.ToolRole)
                         continue;
-                    
-                    var conversationItem = new
+
+                    var conversationItem = new ConversationItemCreateMessage
                     {
-                        type = "conversation.item.create",
-                        item = new
+                        Item = new ConversationItem
                         {
-                            type = "message",
-                            role = message.Role == ChatMessage.UserRole ? "user" : "assistant",
-                            content = new[]
+                            Type = "message",
+                            Role = message.Role == ChatMessage.UserRole ? "user" : "assistant",
+                            Content = new List<ContentPart>
                             {
-                                new
+                                new ContentPart
                                 {
-                                    type = message.Role == ChatMessage.UserRole ? "input_text" : "output_text",
-                                    text = message.Content
+                                    Type = message.Role == ChatMessage.UserRole ? "input_text" : "output_text",
+                                    Text = message.Content
                                 }
                             }
                         }
                     };
-                    
-                    await SendMessageAsync(JsonSerializer.Serialize(conversationItem));
-                    // Reduced logging - only log summary at end
-                    
+
+                    await SendMessageAsync(JsonSerializer.Serialize(conversationItem, OpenAiJsonContext.Default.ConversationItemCreateMessage));
+
                     // Small delay to avoid overwhelming the API
                     await Task.Delay(50);
                 }
@@ -397,64 +384,57 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.OpenAi
 
             var voiceString = _settings.Voice.ToString().ToLowerInvariant();
             _logAction(LogLevel.Info, $"Configuring session with voice: {_settings.Voice} -> {voiceString}");
-            
-            var session = new Dictionary<string, object>
+
+            var sessionConfig = new SessionUpdateMessage
             {
-                ["type"] = "realtime",
-                // Explicitly set all configuration values to avoid surprises from API changes
-                ["output_modalities"] = new[] { "audio" },           
-                ["instructions"] = _settings.Instructions,
-                //["temperature"] = _settings.Temperature,
-                ["max_output_tokens"] = _settings.MaxTokens?.ToString() ?? "inf",
-                ["truncation"] = _settings.AutomaticContextTruncation
-                    ? new { type = "retention_ratio", retention_ratio = _settings.RetentionRatio }
-                    : new { type = "disabled" },
-                ["tool_choice"] = "auto",
-                ["tools"] = _settings.Tools.Select(tool =>
-                    _toolTranslator.TranslateToolDefinition(tool, ToolSchemaInferrer.InferSchema(tool.ArgsType))
-                ).ToArray(),
-                ["audio"] = new
+                EventId = $"evt_{Guid.NewGuid()}",
+                Session = new SessionConfig
                 {
-                    input = new
+                    OutputModalities = new List<string> { "audio" },
+                    Instructions = _settings.Instructions,
+                    MaxOutputTokens = _settings.MaxTokens?.ToString() ?? "inf",
+                    Truncation = new TruncationConfig
                     {
-                        //format = "pcm16",
-                        noise_reduction = new 
-                        {
-                            type = "far_field",    
-                        },
-                        transcription = _settings.InputAudioTranscription.Enabled ? new
-                        {
-                            model = _settings.InputAudioTranscription.Model,
-                            prompt = _settings.InputAudioTranscription.Prompt
-                        } : null,
-                        turn_detection = new
-                        {
-                            type = _settings.TurnDetection.Type,
-                            threshold = _settings.TurnDetection.Threshold,
-                            prefix_padding_ms = _settings.TurnDetection.PrefixPaddingMs,
-                            silence_duration_ms = _settings.TurnDetection.SilenceDurationMs,
-                            idle_timeout_ms = _settings.TurnDetection.IdleTimeoutMs,
-                            create_response = _settings.TurnDetection.CreateResponse,
-                            interrupt_response = _settings.TurnDetection.InterruptResponse
-                        }
+                        Type = _settings.AutomaticContextTruncation ? "retention_ratio" : "disabled",
+                        RetentionRatio = _settings.AutomaticContextTruncation ? _settings.RetentionRatio : null
                     },
-                    output = new
+                    ToolChoice = "auto",
+                    Tools = _settings.Tools.Select(tool =>
+                        (ToolDefinition)_toolTranslator.TranslateToolDefinition(tool, ToolSchemaInferrer.InferSchema(tool.ArgsType))
+                    ).ToList(),
+                    Audio = new AudioConfig
                     {
-                        //format = _settings.OutputAudioFormat,
-                        speed = _settings.TalkingSpeed,
-                        voice = voiceString
+                        Input = new AudioInputConfig
+                        {
+                            NoiseReduction = new NoiseReductionConfig { Type = "far_field" },
+                            Transcription = _settings.InputAudioTranscription.Enabled
+                                ? new TranscriptionConfig
+                                {
+                                    Model = _settings.InputAudioTranscription.Model,
+                                    Prompt = _settings.InputAudioTranscription.Prompt
+                                }
+                                : null,
+                            TurnDetection = new TurnDetectionConfig
+                            {
+                                Type = _settings.TurnDetection.Type,
+                                Threshold = _settings.TurnDetection.Threshold,
+                                PrefixPaddingMs = _settings.TurnDetection.PrefixPaddingMs,
+                                SilenceDurationMs = _settings.TurnDetection.SilenceDurationMs,
+                                IdleTimeoutMs = _settings.TurnDetection.IdleTimeoutMs,
+                                CreateResponse = _settings.TurnDetection.CreateResponse,
+                                InterruptResponse = _settings.TurnDetection.InterruptResponse
+                            }
+                        },
+                        Output = new AudioOutputConfig
+                        {
+                            Speed = _settings.TalkingSpeed,
+                            Voice = voiceString
+                        }
                     }
                 }
             };
 
-            var sessionConfig = new
-            {
-                event_id = $"evt_{Guid.NewGuid()}",
-                type = "session.update",
-                session = session
-            };
-
-            var jsonMessage = JsonSerializer.Serialize(sessionConfig, new JsonSerializerOptions { WriteIndented = true, DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull });
+            var jsonMessage = JsonSerializer.Serialize(sessionConfig, OpenAiJsonContextIndented.Default.SessionUpdateMessage);
             _logAction(LogLevel.Info, $"Sending explicit session config to OpenAI:\n{jsonMessage}");
             await SendMessageAsync(jsonMessage);
             _logAction(LogLevel.Info, "Session configuration sent to OpenAI");
@@ -730,26 +710,25 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.OpenAi
         
         private async Task SendToolResultAsync(string callId, string functionName, string result)
         {
-            var toolResponse = new
+            var toolResponse = new ConversationItemCreateMessage
             {
-                type = "conversation.item.create",
-                item = new
+                Item = new ConversationItem
                 {
-                    type = "function_call_output",
-                    call_id = callId,
-                    output = result
+                    Type = "function_call_output",
+                    CallId = callId,
+                    Output = result
                 }
             };
 
-            var toolResponseJson = JsonSerializer.Serialize(toolResponse);
+            var toolResponseJson = JsonSerializer.Serialize(toolResponse, OpenAiJsonContext.Default.ConversationItemCreateMessage);
             _logAction(LogLevel.Info, $"[Tool] Sending tool result JSON: {toolResponseJson}");
 
             await SendMessageAsync(toolResponseJson);
             _logAction(LogLevel.Info, $"[Tool] Tool result sent for {functionName} (call_id: {callId})");
 
             // Request a new response from the AI
-            var responseCreate = new { type = "response.create" };
-            var responseCreateJson = JsonSerializer.Serialize(responseCreate);
+            var responseCreate = new ResponseCreateMessage();
+            var responseCreateJson = JsonSerializer.Serialize(responseCreate, OpenAiJsonContext.Default.ResponseCreateMessage);
             _logAction(LogLevel.Info, $"[Tool] Sending response.create: {responseCreateJson}");
 
             await SendMessageAsync(responseCreateJson);
@@ -878,20 +857,22 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.OpenAi
                 {
                     return "(no arguments)";
                 }
-                
-                // Try to parse and format the JSON
+
+                // Try to parse and format the JSON with indentation
                 using var jsonDoc = JsonDocument.Parse(argumentsJson);
-                var formatted = JsonSerializer.Serialize(jsonDoc, new JsonSerializerOptions 
-                { 
-                    WriteIndented = true 
-                });
-                
+                using var stream = new MemoryStream();
+                using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true }))
+                {
+                    jsonDoc.RootElement.WriteTo(writer);
+                }
+                var formatted = Encoding.UTF8.GetString(stream.ToArray());
+
                 // If it's a simple single-line JSON, keep it inline
                 if (!formatted.Contains('\n') || formatted.Length < 50)
                 {
                     return argumentsJson;
                 }
-                
+
                 return formatted;
             }
             catch

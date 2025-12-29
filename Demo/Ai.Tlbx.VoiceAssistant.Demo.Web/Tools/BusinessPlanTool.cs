@@ -1,9 +1,53 @@
 using System.ComponentModel;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using Ai.Tlbx.VoiceAssistant.BuiltInTools;
 
 namespace Ai.Tlbx.VoiceAssistant.Demo.Web.Tools
 {
+    public class BusinessPlanResult
+    {
+        [JsonPropertyName("success")]
+        public bool Success { get; } = true;
+
+        [JsonPropertyName("data")]
+        public BusinessPlanData? Data { get; set; }
+    }
+
+    public class BusinessPlanData
+    {
+        [JsonPropertyName("company")]
+        public string Company { get; set; } = string.Empty;
+
+        [JsonPropertyName("industry")]
+        public string Industry { get; set; } = string.Empty;
+
+        [JsonPropertyName("funding_target")]
+        public double FundingTarget { get; set; }
+
+        [JsonPropertyName("funding_stage")]
+        public string FundingStage { get; set; } = string.Empty;
+
+        [JsonPropertyName("strategy")]
+        public string Strategy { get; set; } = string.Empty;
+
+        [JsonPropertyName("team_size")]
+        public string TeamSize { get; set; } = string.Empty;
+
+        [JsonPropertyName("projected_revenue")]
+        public string ProjectedRevenue { get; set; } = string.Empty;
+
+        [JsonPropertyName("business_plan")]
+        public string BusinessPlan { get; set; } = string.Empty;
+    }
+
+    [JsonSerializable(typeof(BusinessPlanResult))]
+    [JsonSerializable(typeof(BusinessPlanTool.Args))]
+    public partial class BusinessPlanJsonContext : JsonSerializerContext
+    {
+    }
+
     public enum IndustryType
     {
         Technology,
@@ -109,17 +153,22 @@ to accelerate growth in the {args.Industry.ToString().ToLower()} sector.
 === END OF BUSINESS PLAN ===
 ";
 
-            return Task.FromResult(CreateSuccessResult(new
+            var result = new BusinessPlanResult
             {
-                company = args.CompanyName,
-                industry = args.Industry.ToString(),
-                funding_target = args.TargetFunding,
-                funding_stage = fundingStageText,
-                strategy = args.Strategy?.ToString() ?? "B2C",
-                team_size = teamSizeText,
-                projected_revenue = revenueText,
-                business_plan = businessPlan.Trim()
-            }));
+                Data = new BusinessPlanData
+                {
+                    Company = args.CompanyName,
+                    Industry = args.Industry.ToString(),
+                    FundingTarget = args.TargetFunding,
+                    FundingStage = fundingStageText,
+                    Strategy = args.Strategy?.ToString() ?? "B2C",
+                    TeamSize = teamSizeText,
+                    ProjectedRevenue = revenueText,
+                    BusinessPlan = businessPlan.Trim()
+                }
+            };
+
+            return Task.FromResult(JsonSerializer.Serialize(result, BusinessPlanJsonContext.Default.BusinessPlanResult));
         }
     }
 }

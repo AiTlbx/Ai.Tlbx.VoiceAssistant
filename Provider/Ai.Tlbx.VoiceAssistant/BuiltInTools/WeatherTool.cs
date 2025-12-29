@@ -1,5 +1,6 @@
 using System;
 using System.ComponentModel;
+using System.Text.Json;
 using System.Threading.Tasks;
 
 namespace Ai.Tlbx.VoiceAssistant.BuiltInTools
@@ -33,18 +34,18 @@ namespace Ai.Tlbx.VoiceAssistant.BuiltInTools
                 temperature = (int)(temperature * 9.0 / 5.0 + 32);
             }
 
-            var result = new
+            var result = new ToolSuccessResult<WeatherResult>(new WeatherResult
             {
-                location = args.Location,
-                temperature = temperature,
-                unit = unitSymbol,
-                condition = condition,
-                humidity = random.Next(40, 80),
-                wind_speed = random.Next(5, 25),
-                description = $"Currently {temperature}{unitSymbol} and {condition} in {args.Location}"
-            };
+                Location = args.Location,
+                Temperature = temperature,
+                Unit = unitSymbol,
+                Condition = condition,
+                Humidity = random.Next(40, 80),
+                WindSpeed = random.Next(5, 25),
+                Description = $"Currently {temperature}{unitSymbol} and {condition} in {args.Location}"
+            });
 
-            return Task.FromResult(CreateSuccessResult(result));
+            return Task.FromResult(JsonSerializer.Serialize(result, ToolResultsJsonContext.Default.ToolSuccessResultWeatherResult));
         }
     }
 }

@@ -1050,11 +1050,24 @@ function cleanupAudio() {
      playbackNodeConnected = false;
 }
 
+// JSON-returning wrappers for AOT-safe deserialization in C#
+async function getAvailableMicrophonesJson() {
+    const devices = await getAvailableMicrophones();
+    return JSON.stringify(devices);
+}
+
+async function requestMicrophonePermissionAndGetDevicesJson() {
+    const devices = await requestMicrophonePermissionAndGetDevices();
+    return JSON.stringify(devices);
+}
+
 // Attach functions to window for backwards compatibility
 window.audioInterop = {
     initAudioWithUserInteraction,
     getAvailableMicrophones,
+    getAvailableMicrophonesJson,
     requestMicrophonePermissionAndGetDevices,
+    requestMicrophonePermissionAndGetDevicesJson,
     startRecording,
     stopRecording,
     playAudio,
@@ -1079,7 +1092,9 @@ window.addEventListener('beforeunload', () => {
 export {
     initAudioWithUserInteraction,
     getAvailableMicrophones,
+    getAvailableMicrophonesJson,
     requestMicrophonePermissionAndGetDevices,
+    requestMicrophonePermissionAndGetDevicesJson,
     startRecording,
     stopRecording,
     playAudio,

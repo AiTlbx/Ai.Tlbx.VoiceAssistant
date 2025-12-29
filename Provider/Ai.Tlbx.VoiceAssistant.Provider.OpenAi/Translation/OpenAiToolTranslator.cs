@@ -1,7 +1,9 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using Ai.Tlbx.VoiceAssistant.Interfaces;
 using Ai.Tlbx.VoiceAssistant.Models;
+using Ai.Tlbx.VoiceAssistant.Provider.OpenAi.Protocol;
 using Ai.Tlbx.VoiceAssistant.Reflection;
 using Ai.Tlbx.VoiceAssistant.Translation;
 
@@ -22,14 +24,12 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.OpenAi.Translation
 
         public object TranslateToolDefinition(IVoiceTool tool, ToolSchema schema)
         {
-            var parameters = BuildParametersObject(schema);
-
-            return new Dictionary<string, object>
+            return new ToolDefinition
             {
-                ["type"] = "function",
-                ["name"] = tool.Name,
-                ["description"] = tool.Description,
-                ["parameters"] = parameters
+                Type = "function",
+                Name = tool.Name,
+                Description = tool.Description,
+                Parameters = BuildParametersObject(schema)
             };
         }
 
@@ -40,21 +40,20 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.OpenAi.Translation
 
         public object FormatToolResponse(string result, string callId, string toolName)
         {
-            return new Dictionary<string, object>
+            return new ConversationItemCreateMessage
             {
-                ["type"] = "conversation.item.create",
-                ["item"] = new Dictionary<string, object>
+                Item = new ConversationItem
                 {
-                    ["type"] = "function_call_output",
-                    ["call_id"] = callId,
-                    ["output"] = result
+                    Type = "function_call_output",
+                    CallId = callId,
+                    Output = result
                 }
             };
         }
 
-        private Dictionary<string, object> BuildParametersObject(ToolSchema schema)
+        private ToolParameters BuildParametersObject(ToolSchema schema)
         {
-            var properties = new Dictionary<string, object>();
+            var properties = new Dictionary<string, ToolProperty>();
             var required = new List<string>();
 
             foreach (var (name, param) in schema.Parameters)
@@ -71,66 +70,59 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.OpenAi.Translation
                 }
             }
 
-            var result = new Dictionary<string, object>
+            return new ToolParameters
             {
-                ["type"] = "object",
-                ["properties"] = properties
+                Type = "object",
+                Properties = properties,
+                Required = required.Count > 0 ? required : null,
+                AdditionalProperties = _useStrictMode ? false : null
             };
-
-            if (required.Count > 0)
-            {
-                result["required"] = required;
-            }
-
-            if (_useStrictMode)
-            {
-                result["additionalProperties"] = false;
-            }
-
-            return result;
         }
 
-        private object BuildPropertyObject(ToolParameter param)
+        private ToolProperty BuildPropertyObject(ToolParameter param)
         {
-            var prop = new Dictionary<string, object>();
+            var prop = new ToolProperty();
 
+            var typeName = TypeMapper.ToJsonSchemaType(param.Type);
             if (param.Nullable && _useStrictMode)
             {
-                prop["type"] = new[] { TypeMapper.ToJsonSchemaType(param.Type), "null" };
+                using var doc = JsonDocument.Parse($"[\"{typeName}\", \"null\"]");
+                prop.Type = doc.RootElement.Clone();
             }
             else
             {
-                prop["type"] = TypeMapper.ToJsonSchemaType(param.Type);
+                using var doc = JsonDocument.Parse($"\"{typeName}\"");
+                prop.Type = doc.RootElement.Clone();
             }
 
             if (!string.IsNullOrEmpty(param.Description))
             {
-                prop["description"] = param.Description;
+                prop.Description = param.Description;
             }
 
             if (param.Enum != null && param.Enum.Count > 0)
             {
-                prop["enum"] = param.Enum;
+                prop.Enum = param.Enum;
             }
 
             if (!string.IsNullOrEmpty(param.Format))
             {
-                prop["format"] = param.Format;
+                prop.Format = param.Format;
             }
 
             if (param.Default != null)
             {
-                prop["default"] = param.Default;
+                prop.Default = SerializeDefaultValue(param.Default);
             }
 
             if (param.Type == ToolParameterType.Array && param.Items != null)
             {
-                prop["items"] = BuildPropertyObject(param.Items);
+                prop.Items = BuildPropertyObject(param.Items);
             }
 
             if (param.Type == ToolParameterType.Object && param.Properties != null)
             {
-                var nestedProps = new Dictionary<string, object>();
+                var nestedProps = new Dictionary<string, ToolProperty>();
                 var nestedRequired = new List<string>();
 
                 foreach (var (name, nestedParam) in param.Properties)
@@ -147,45 +139,55 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.OpenAi.Translation
                     }
                 }
 
-                prop["properties"] = nestedProps;
-
-                if (nestedRequired.Count > 0)
-                {
-                    prop["required"] = nestedRequired;
-                }
-
-                if (_useStrictMode)
-                {
-                    prop["additionalProperties"] = false;
-                }
+                prop.Properties = nestedProps;
+                prop.Required = nestedRequired.Count > 0 ? nestedRequired : null;
+                prop.AdditionalProperties = _useStrictMode ? false : null;
             }
 
             if (param.Minimum.HasValue)
             {
-                prop["minimum"] = param.Minimum.Value;
+                prop.Minimum = param.Minimum.Value;
             }
 
             if (param.Maximum.HasValue)
             {
-                prop["maximum"] = param.Maximum.Value;
+                prop.Maximum = param.Maximum.Value;
             }
 
             if (param.MinLength.HasValue)
             {
-                prop["minLength"] = param.MinLength.Value;
+                prop.MinLength = param.MinLength.Value;
             }
 
             if (param.MaxLength.HasValue)
             {
-                prop["maxLength"] = param.MaxLength.Value;
+                prop.MaxLength = param.MaxLength.Value;
             }
 
             if (!string.IsNullOrEmpty(param.Pattern))
             {
-                prop["pattern"] = param.Pattern;
+                prop.Pattern = param.Pattern;
             }
 
             return prop;
+        }
+
+        private static JsonElement SerializeDefaultValue(object value)
+        {
+            var json = value switch
+            {
+                string s => $"\"{s.Replace("\\", "\\\\").Replace("\"", "\\\"")}\"",
+                bool b => b ? "true" : "false",
+                int i => i.ToString(),
+                long l => l.ToString(),
+                double d => d.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                float f => f.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                decimal m => m.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                _ => $"\"{value}\""
+            };
+
+            using var doc = JsonDocument.Parse(json);
+            return doc.RootElement.Clone();
         }
     }
 }

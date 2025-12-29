@@ -173,9 +173,9 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Web
         {
             try
             {
-                // Parse the diagnostic data
-                var diagnostic = System.Text.Json.JsonSerializer.Deserialize<JsonElement>(diagnosticJson);
-                
+                using var doc = JsonDocument.Parse(diagnosticJson);
+                var diagnostic = doc.RootElement;
+
                 var timestamp = diagnostic.GetProperty("timestamp").GetString();
                 var message = diagnostic.GetProperty("message").GetString() ?? "";
                 var dataJson = diagnostic.TryGetProperty("data", out var dataElement) && dataElement.ValueKind != JsonValueKind.Null
@@ -202,7 +202,7 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Web
             {
                 Log(LogLevel.Error, $"Error processing JavaScript diagnostic: {ex.Message}");
             }
-            
+
             return Task.CompletedTask;
         }
 
@@ -549,7 +549,9 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Web
 
             try
             {
-                var devices = await _audioModule.InvokeAsync<List<AudioDeviceInfo>>("getAvailableMicrophones");
+                var json = await _audioModule.InvokeAsync<string>("getAvailableMicrophonesJson");
+                var devices = JsonSerializer.Deserialize(json, WebAudioJsonContext.Default.ListAudioDeviceInfo)
+                              ?? new List<AudioDeviceInfo>();
                 Log(LogLevel.Info, $"Found {devices.Count} microphone devices");
                 return devices;
             }
@@ -576,7 +578,9 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Web
 
             try
             {
-                var devices = await _audioModule.InvokeAsync<List<AudioDeviceInfo>>("requestMicrophonePermissionAndGetDevices");
+                var json = await _audioModule.InvokeAsync<string>("requestMicrophonePermissionAndGetDevicesJson");
+                var devices = JsonSerializer.Deserialize(json, WebAudioJsonContext.Default.ListAudioDeviceInfo)
+                              ?? new List<AudioDeviceInfo>();
                 Log(LogLevel.Info, $"Found {devices.Count} microphone devices after permission request");
                 return devices;
             }
