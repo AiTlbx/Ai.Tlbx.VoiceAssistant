@@ -49,6 +49,11 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.XAi
         public bool IsConnected => _webSocket?.State == WebSocketState.Open;
 
         /// <summary>
+        /// Gets the required input sample rate for xAI (24kHz, same as OpenAI).
+        /// </summary>
+        public AudioSampleRate RequiredInputSampleRate => AudioSampleRate.Rate24000;
+
+        /// <summary>
         /// Gets or sets the settings for this provider instance.
         /// </summary>
         public XaiVoiceSettings? Settings

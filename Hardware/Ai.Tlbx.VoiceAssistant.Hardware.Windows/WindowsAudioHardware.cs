@@ -158,7 +158,7 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Windows
             Log(LogLevel.Info, "Audio processor task stopped");
         }
 
-        public async Task<bool> StartRecordingAudio(MicrophoneAudioReceivedEventHandler audioDataReceivedHandler)
+        public async Task<bool> StartRecordingAudio(MicrophoneAudioReceivedEventHandler audioDataReceivedHandler, AudioSampleRate targetSampleRate = AudioSampleRate.Rate24000)
         {
             if (_isRecording)
             {

@@ -55,6 +55,11 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.Google
         public bool IsConnected => _webSocket?.State == WebSocketState.Open && _setupComplete;
 
         /// <summary>
+        /// Gets the required input audio sample rate for Google (16kHz).
+        /// </summary>
+        public AudioSampleRate RequiredInputSampleRate => AudioSampleRate.Rate16000;
+
+        /// <summary>
         /// Callback invoked when a message is received from the AI provider.
         /// </summary>
         public Action<ChatMessage>? OnMessageReceived { get; set; }

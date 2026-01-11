@@ -1,23 +1,90 @@
 ﻿// audio-processor.js
+// AudioRecorderProcessor: Captures at 48kHz, downsamples to provider's required rate (16kHz/24kHz)
+
+// Pre-calculated 2nd order Butterworth low-pass filter configs for supported target rates
+// All assume 48kHz capture rate
+const DOWNSAMPLE_CONFIGS = {
+    // 48kHz → 24kHz (ratio 2:1), LPF at 8kHz
+    24000: {
+        ratio: 2,
+        b: [0.1550, 0.3101, 0.1550],
+        a: [-0.6202, 0.2404]
+    },
+    // 48kHz → 16kHz (ratio 3:1), LPF at 6kHz
+    16000: {
+        ratio: 3,
+        b: [0.0976, 0.1953, 0.0976],
+        a: [-0.9428, 0.3333]
+    },
+    // 48kHz → 48kHz (no downsampling), LPF at 16kHz for consistency
+    48000: {
+        ratio: 1,
+        b: [0.2929, 0.5858, 0.2929],
+        a: [-0.0, 0.1716]
+    }
+};
+
 class AudioRecorderProcessor extends AudioWorkletProcessor {
-    constructor() {
+    constructor(options) {
         super();
-        // Create a buffer to store audio data (4096 samples)
-        this.buffer = new Int16Array(4096);
+
+        // Get target sample rate from processor options (default 24kHz for OpenAI)
+        const targetRate = options?.processorOptions?.targetSampleRate || 24000;
+        const config = DOWNSAMPLE_CONFIGS[targetRate];
+
+        if (!config) {
+            console.error(`[AudioProcessor] Unsupported target rate: ${targetRate}Hz. Using 24kHz.`);
+            this.config = DOWNSAMPLE_CONFIGS[24000];
+            this.targetRate = 24000;
+        } else {
+            this.config = config;
+            this.targetRate = targetRate;
+        }
+
+        console.log(`[AudioProcessor] 48kHz → ${this.targetRate}Hz (ratio ${this.config.ratio}:1)`);
+
+        // Buffer size scales with target rate (base 2048 samples @ 24kHz ≈ 85ms)
+        const bufferSize = Math.floor(2048 * (this.targetRate / 24000));
+        this.buffer = new Int16Array(bufferSize);
         this.bufferIndex = 0;
         this.isActive = true;
         this.isStopping = false;
         this.stopCountdown = 0;
-        
-        // Listen for messages from the main thread
+
+        // Anti-aliasing filter state
+        this.filterX = [0, 0];
+        this.filterY = [0, 0];
+
+        // Downsampling counter
+        this.sampleIndex = 0;
+
         this.port.onmessage = (event) => {
             if (event.data?.command === 'stop') {
-                console.log("[AudioProcessor] Received stop command, initiating graceful shutdown");
+                console.log("[AudioProcessor] Received stop command");
                 this.isStopping = true;
-                // Process a few more frames before stopping (128 samples @ 48kHz = ~2.7ms)
                 this.stopCountdown = 3;
             }
         };
+    }
+
+    // 2nd order IIR Butterworth low-pass filter using config coefficients
+    applyAntiAliasingFilter(sample) {
+        const b = this.config.b;
+        const a = this.config.a;
+
+        const output = b[0] * sample
+                     + b[1] * this.filterX[0]
+                     + b[2] * this.filterX[1]
+                     - a[0] * this.filterY[0]
+                     - a[1] * this.filterY[1];
+
+        // Shift history
+        this.filterX[1] = this.filterX[0];
+        this.filterX[0] = sample;
+        this.filterY[1] = this.filterY[0];
+        this.filterY[0] = output;
+
+        return output;
     }
 
     process(inputs, outputs) {
@@ -25,9 +92,7 @@ class AudioRecorderProcessor extends AudioWorkletProcessor {
         if (this.isStopping) {
             if (this.stopCountdown > 0) {
                 this.stopCountdown--;
-                // Flush any remaining data in buffer
                 if (this.bufferIndex > 0 && this.stopCountdown === 0) {
-                    // Send the final partial buffer
                     this.port.postMessage({
                         audioData: this.buffer.slice(0, this.bufferIndex)
                     });
@@ -35,42 +100,44 @@ class AudioRecorderProcessor extends AudioWorkletProcessor {
                 }
             } else {
                 console.log("[AudioProcessor] Graceful shutdown complete");
-                // Send confirmation that processor is stopping
                 this.port.postMessage({ stopped: true });
                 this.isActive = false;
-                return false; // Terminate processor
+                return false;
             }
         }
-        
-        // Get the first channel of the first input
+
         const input = inputs[0]?.[0];
-        
         if (!input || input.length === 0) {
-            // No input data, continue processing
             return true;
         }
 
-        // Process the audio data
+        const ratio = this.config.ratio;
+
+        // Process each sample: apply anti-aliasing filter, then downsample
         for (let i = 0; i < input.length; i++) {
-            // Convert float [-1, 1] to 16-bit PCM [-32768, 32767]
-            const sample = Math.max(-1, Math.min(1, input[i]));
-            const pcmValue = sample < 0 ? sample * 32768 : sample * 32767;
-            
-            // Store in buffer
-            this.buffer[this.bufferIndex++] = Math.floor(pcmValue);
-            
-            // When buffer is full, send it to the main thread
-            if (this.bufferIndex >= this.buffer.length) {
-                this.port.postMessage({
-                    audioData: this.buffer.slice(0)  // Send a copy of the buffer
-                });
-                
-                // Reset buffer index
-                this.bufferIndex = 0;
+            const filtered = this.applyAntiAliasingFilter(input[i]);
+
+            // Downsample N:1 based on config ratio
+            this.sampleIndex++;
+            if (this.sampleIndex >= ratio) {
+                this.sampleIndex = 0;
+
+                // Convert filtered sample to PCM16
+                const clamped = Math.max(-1, Math.min(1, filtered));
+                const pcmValue = clamped < 0 ? clamped * 32768 : clamped * 32767;
+
+                this.buffer[this.bufferIndex++] = Math.floor(pcmValue);
+
+                // Send buffer when full
+                if (this.bufferIndex >= this.buffer.length) {
+                    this.port.postMessage({
+                        audioData: this.buffer.slice(0)
+                    });
+                    this.bufferIndex = 0;
+                }
             }
         }
-        
-        // Keep processor alive
+
         return true;
     }
 }
@@ -78,10 +145,11 @@ class AudioRecorderProcessor extends AudioWorkletProcessor {
 registerProcessor('audio-recorder-processor', AudioRecorderProcessor);
 
 // --- Playback Processor ---
+// Receives 24kHz audio, upsamples to 48kHz with linear interpolation
 
-const BUFFER_SIZE = 4320000; // ~180s (3 min) at 24kHz – ~17MB, prevents overflow on very long responses
-const CROSSFADE_SAMPLES = 128; // Number of samples for crossfade (adjust as needed)
-const MIN_START_BUFFER = 4800; // ~200 ms @ 24 kHz – buffer before starting playback
+const BUFFER_SIZE = 8640000; // ~180s (3 min) at 48kHz – ~34MB, prevents overflow on very long responses
+const CROSSFADE_SAMPLES = 256; // Number of samples for crossfade (doubled for 48kHz)
+const MIN_START_BUFFER = 9600; // ~200 ms @ 48 kHz – buffer before starting playback
 
 class PlaybackProcessor extends AudioWorkletProcessor {
     constructor(options) {
@@ -93,11 +161,14 @@ class PlaybackProcessor extends AudioWorkletProcessor {
         this._isPlaying = false; // Start paused until data arrives
         this._isStopping = false; // Flag to indicate stop request
 
+        // Upsampling state: linear interpolation from 24kHz to 48kHz
+        this._lastInputSample = 0; // Last sample from previous chunk for interpolation
+
         // Crossfading state
         this._crossfadeBuffer = new Float32Array(CROSSFADE_SAMPLES).fill(0);
         this._isCrossfadingIn = false;
         this._crossfadeIndex = 0;
-        
+
         // Audio enhancement state
         this._prevSample = 0; // For interpolation
         this._eqHistory = new Float32Array(4).fill(0); // For simple EQ
@@ -121,6 +192,7 @@ class PlaybackProcessor extends AudioWorkletProcessor {
                  this._crossfadeIndex = 0;
                  this._isCrossfadingIn = false;
                  this._crossfadeBuffer.fill(0);
+                 this._lastInputSample = 0; // Reset upsampling state
                  this._buffer.fill(0); // Clear the entire buffer
             } else if (event.data.command === 'setEnhancement') {
                 this._enhancementEnabled = !!event.data.enabled;
@@ -138,9 +210,13 @@ class PlaybackProcessor extends AudioWorkletProcessor {
     }
 
     _handleAudioData(audioData) {
-        const data = audioData instanceof ArrayBuffer ? new Float32Array(audioData) : new Float32Array(audioData.buffer);
+        const inputData = audioData instanceof ArrayBuffer ? new Float32Array(audioData) : new Float32Array(audioData.buffer);
 
-        if (this._bufferFill + data.length > BUFFER_SIZE) {
+        // Upsample 24kHz → 48kHz (2:1) with linear interpolation
+        // Each input sample produces 2 output samples
+        const upsampledLength = inputData.length * 2;
+
+        if (this._bufferFill + upsampledLength > BUFFER_SIZE) {
             console.warn('[PlaybackProcessor] Buffer overflow, dropping new data.');
             return; // skip this chunk to preserve already queued audio
         }
@@ -149,18 +225,31 @@ class PlaybackProcessor extends AudioWorkletProcessor {
         if (this._bufferFill === 0) {
              this._isCrossfadingIn = true;
              this._crossfadeIndex = 0;
-             // Store the end of the previous (non-existent) chunk as silence
              this._crossfadeBuffer.fill(0);
         }
 
+        // Upsample with linear interpolation and copy into ring buffer
+        // For each input sample at index i:
+        //   - Output[2i] = original sample
+        //   - Output[2i+1] = interpolated midpoint to next sample
+        for (let i = 0; i < inputData.length; i++) {
+            const curr = inputData[i];
+            const prev = (i === 0) ? this._lastInputSample : inputData[i - 1];
 
-        // Copy data into the ring buffer
-        for (let i = 0; i < data.length; i++) {
-            this._buffer[this._writeIndex] = data[i];
+            // Interpolated sample (midpoint between previous and current)
+            const interpolated = (prev + curr) * 0.5;
+
+            // Write interpolated sample first, then original
+            this._buffer[this._writeIndex] = interpolated;
+            this._writeIndex = (this._writeIndex + 1) % BUFFER_SIZE;
+
+            this._buffer[this._writeIndex] = curr;
             this._writeIndex = (this._writeIndex + 1) % BUFFER_SIZE;
         }
-        this._bufferFill += data.length;
 
+        // Save last sample for interpolation with next chunk
+        this._lastInputSample = inputData[inputData.length - 1];
+        this._bufferFill += upsampledLength;
     }
 
     // Simple linear crossfade

@@ -44,6 +44,7 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.Google.Models
     public enum SpeechSensitivity
     {
         HIGH,
+        MEDIUM,
         LOW
     }
 

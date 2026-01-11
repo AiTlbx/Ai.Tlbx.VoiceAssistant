@@ -12,6 +12,12 @@ namespace Ai.Tlbx.VoiceAssistant.Interfaces
         /// Gets a value indicating whether the provider is connected and ready.
         /// </summary>
         bool IsConnected { get; }
+
+        /// <summary>
+        /// Gets the required input audio sample rate for this provider.
+        /// The hardware layer will downsample from 48kHz capture to this rate.
+        /// </summary>
+        AudioSampleRate RequiredInputSampleRate { get; }
         
         /// <summary>
         /// Connects to the AI provider using the specified settings.

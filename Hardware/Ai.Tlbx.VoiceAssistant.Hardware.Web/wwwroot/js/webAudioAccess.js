@@ -8,11 +8,15 @@ let isRecording = false;
 let audioContext = null;
 let audioInitialized = false;
 let recordingInterval = null;
-let playbackSampleRate = 24000;
+let audioContextSampleRate = 48000; // Process at 48kHz for better quality, downsample to 24kHz for OpenAI
+let openAiSampleRate = 24000; // OpenAI expects 24kHz
 let playbackNodeConnected = false;
 let sessionCount = 0;
 let lastSessionDiagnostics = null;
 let isPlayingAudio = false; // Track if assistant is currently speaking
+let deEsserNode = null;    // High-shelf EQ to tame sibilance before compression
+let compressorNode = null; // Audio compressor for voice enhancement
+let makeupGainNode = null; // Input gain before compression
 // Note: We properly stop streams when done - don't hog the microphone!
 
 // Diagnostic logging levels
@@ -160,12 +164,12 @@ async function initAudioWithUserInteraction() {
         
         // Create AudioContext with the correct sample rate for OpenAI/Playback
         // Check if context already exists and matches rate, reuse if possible
-        if (!audioContext || audioContext.sampleRate !== playbackSampleRate) {
+        if (!audioContext || audioContext.sampleRate !== audioContextSampleRate) {
              if (audioContext) {
                  logNormal(`Closing existing AudioContext (state: ${audioContext.state})`);
                  await audioContext.close(); // Close existing context if rate mismatches
              }
-             audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: playbackSampleRate });
+             audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: audioContextSampleRate });
              logNormal(`AudioContext created/recreated`, {
                  sampleRate: audioContext.sampleRate,
                  state: audioContext.state,
@@ -259,7 +263,7 @@ async function initAudioWithUserInteraction() {
         const stream = await navigator.mediaDevices.getUserMedia({
             audio: {
                 channelCount: 1,
-                sampleRate: playbackSampleRate,
+                sampleRate: audioContextSampleRate,
                 echoCancellation: true,
                 noiseSuppression: true,
                 autoGainControl: true
@@ -375,7 +379,7 @@ async function ensureAudioContextResumed() {
         logNormal('AudioContext is null, attempting reinitialization');
         // Try a lightweight init if context is missing
          try {
-             audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: playbackSampleRate });
+             audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: audioContextSampleRate });
              await loadAudioWorkletModules(); // Need modules loaded too
              // Setup playback node again if missing
               if (!playbackWorkletNode && audioContext.state !== 'closed') {
@@ -535,10 +539,11 @@ function getBaseDeviceName(fullName) {
 }
 
 // --- Recording ---
-async function startRecording(dotNetObj, intervalMs = 500, deviceId = null) {
+async function startRecording(dotNetObj, intervalMs = 500, deviceId = null, targetSampleRate = 24000) {
     logNormal(`Attempting to start recording - Session ${sessionCount}`, {
         intervalMs,
         deviceId: deviceId || 'default',
+        targetSampleRate,
         currentState: captureAudioState()
     });
     
@@ -608,15 +613,55 @@ async function startRecording(dotNetObj, intervalMs = 500, deviceId = null) {
             audioWorkletNode.disconnect();
             audioWorkletNode = null;
         }
-        
-        logNormal('Creating fresh AudioRecorderProcessor node');
-        audioWorkletNode = new AudioWorkletNode(audioContext, 'audio-recorder-processor');
+
+        // Clean up previous processing nodes
+        if (deEsserNode) {
+            deEsserNode.disconnect();
+            deEsserNode = null;
+        }
+        if (compressorNode) {
+            compressorNode.disconnect();
+            compressorNode = null;
+        }
+        if (makeupGainNode) {
+            makeupGainNode.disconnect();
+            makeupGainNode = null;
+        }
+
+        logNormal(`Creating fresh AudioRecorderProcessor node with targetSampleRate: ${targetSampleRate}Hz`);
+        audioWorkletNode = new AudioWorkletNode(audioContext, 'audio-recorder-processor', {
+            processorOptions: {
+                targetSampleRate: targetSampleRate,
+                captureSampleRate: audioContextSampleRate // 48000
+            }
+        });
         audioWorkletNode.onprocessorerror = (e) => {
             logNormal('Recorder processor error', e);
             saveDiagnostics('recorder_processor_error', false, e);
         };
-        saveDiagnostics('recorder_worklet_created');
+        saveDiagnostics('recorder_worklet_created', true, { targetSampleRate, captureSampleRate: audioContextSampleRate });
 
+        // Create audio processing chain: de-esser → gain → compressor
+        // De-esser tames sibilance BEFORE amplification to prevent harsh sounds triggering compressor
+        logNormal('Creating audio processing chain (de-esser + gain + compressor)');
+
+        // High-shelf EQ to reduce sibilance and harshness (acts as de-esser)
+        deEsserNode = audioContext.createBiquadFilter();
+        deEsserNode.type = 'highshelf';
+        deEsserNode.frequency.value = 5500;    // Roll off above 5.5kHz
+        deEsserNode.gain.value = -4;           // Reduce highs by 4dB
+
+        makeupGainNode = audioContext.createGain();
+        makeupGainNode.gain.value = 1.5;       // Boost input to ensure quiet mics are audible
+
+        compressorNode = audioContext.createDynamicsCompressor();
+        compressorNode.threshold.value = -18;  // Start compressing at -18dB
+        compressorNode.knee.value = 6;         // Tighter knee for more predictable limiting
+        compressorNode.ratio.value = 8;        // Higher ratio acts more like a limiter
+        compressorNode.attack.value = 0.002;   // 2ms attack - fast to catch transients
+        compressorNode.release.value = 0.1;    // 100ms release - responsive
+
+        saveDiagnostics('audio_processing_chain_created');
 
         // Setup message handling from the recorder worklet
         let audioDataCount = 0;
@@ -665,7 +710,12 @@ async function startRecording(dotNetObj, intervalMs = 500, deviceId = null) {
         }, 1000); // Check every second
 
         mediaStreamSource = audioContext.createMediaStreamSource(mediaStream);
-        mediaStreamSource.connect(audioWorkletNode);
+
+        // Connect audio processing chain: source → de-esser → gain → compressor → recorder worklet
+        mediaStreamSource.connect(deEsserNode);
+        deEsserNode.connect(makeupGainNode);
+        makeupGainNode.connect(compressorNode);
+        compressorNode.connect(audioWorkletNode);
         // Do NOT connect recorder worklet to destination
         // audioWorkletNode.connect(audioContext.destination); // NO! This would cause feedback
         
@@ -731,6 +781,32 @@ async function stopRecording() {
          } catch(e) {
              logNormal('Error disconnecting MediaStreamSource', e);
          }
+     }
+
+     // Disconnect processing chain nodes
+     if (deEsserNode) {
+         try {
+             deEsserNode.disconnect();
+         } catch(e) {
+             logNormal('Error disconnecting deEsserNode', e);
+         }
+         deEsserNode = null;
+     }
+     if (compressorNode) {
+         try {
+             compressorNode.disconnect();
+         } catch(e) {
+             logNormal('Error disconnecting compressorNode', e);
+         }
+         compressorNode = null;
+     }
+     if (makeupGainNode) {
+         try {
+             makeupGainNode.disconnect();
+         } catch(e) {
+             logNormal('Error disconnecting makeupGainNode', e);
+         }
+         makeupGainNode = null;
      }
      
      // Signal the worklet processor to stop processing new audio and clean up
@@ -1036,9 +1112,21 @@ function cleanupAudio() {
          playbackWorkletNode.disconnect();
          playbackWorkletNode = null;
      }
-      if (audioWorkletNode) { // Recorder node
+     if (audioWorkletNode) { // Recorder node
          audioWorkletNode.disconnect();
          audioWorkletNode = null;
+     }
+     if (deEsserNode) {
+         deEsserNode.disconnect();
+         deEsserNode = null;
+     }
+     if (compressorNode) {
+         compressorNode.disconnect();
+         compressorNode = null;
+     }
+     if (makeupGainNode) {
+         makeupGainNode.disconnect();
+         makeupGainNode = null;
      }
 
      if (audioContext && audioContext.state !== 'closed') {

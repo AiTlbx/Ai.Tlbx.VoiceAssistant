@@ -23,8 +23,9 @@ namespace Ai.Tlbx.VoiceAssistant.Interfaces
         /// Starts recording audio from the microphone and sets up the handler for received audio data.
         /// </summary>
         /// <param name="audioDataReceivedHandler">The event handler that will be called when audio data is received from the microphone.</param>
+        /// <param name="targetSampleRate">The target sample rate for output audio. Hardware captures at 48kHz and downsamples to this rate.</param>
         /// <returns>A task that resolves to true if recording started successfully, false otherwise.</returns>
-        Task<bool> StartRecordingAudio(MicrophoneAudioReceivedEventHandler audioDataReceivedHandler);
+        Task<bool> StartRecordingAudio(MicrophoneAudioReceivedEventHandler audioDataReceivedHandler, AudioSampleRate targetSampleRate = AudioSampleRate.Rate24000);
         
         /// <summary>
         /// Plays the provided audio through the system's audio output.

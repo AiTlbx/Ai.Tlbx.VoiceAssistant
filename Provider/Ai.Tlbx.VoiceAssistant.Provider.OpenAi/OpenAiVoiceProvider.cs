@@ -49,7 +49,12 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.OpenAi
         /// Gets a value indicating whether the provider is connected and ready.
         /// </summary>
         public bool IsConnected => _webSocket?.State == WebSocketState.Open;
-        
+
+        /// <summary>
+        /// Gets the required input audio sample rate for OpenAI (24kHz).
+        /// </summary>
+        public AudioSampleRate RequiredInputSampleRate => AudioSampleRate.Rate24000;
+
         /// <summary>
         /// Gets or sets the settings for this provider instance.
         /// </summary>

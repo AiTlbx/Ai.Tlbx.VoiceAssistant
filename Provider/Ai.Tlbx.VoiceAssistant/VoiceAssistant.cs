@@ -187,8 +187,8 @@ namespace Ai.Tlbx.VoiceAssistant
                 // Initialize hardware
                 await _hardwareAccess.InitAudio();
                 
-                // Start recording with audio callback handler
-                bool recordingStarted = await _hardwareAccess.StartRecordingAudio(OnAudioDataReceived);
+                // Start recording with audio callback handler, using provider's required sample rate
+                bool recordingStarted = await _hardwareAccess.StartRecordingAudio(OnAudioDataReceived, _provider.RequiredInputSampleRate);
                 
                 if (!recordingStarted)
                 {

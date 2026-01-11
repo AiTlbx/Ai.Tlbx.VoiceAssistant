@@ -587,7 +587,7 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Linux
         /// <summary>
         /// Starts recording audio from the selected microphone.
         /// </summary>
-        public async Task<bool> StartRecordingAudio(MicrophoneAudioReceivedEventHandler audioDataReceivedHandler)
+        public async Task<bool> StartRecordingAudio(MicrophoneAudioReceivedEventHandler audioDataReceivedHandler, AudioSampleRate targetSampleRate = AudioSampleRate.Rate24000)
         {
             if (!_isInitialized)
             {

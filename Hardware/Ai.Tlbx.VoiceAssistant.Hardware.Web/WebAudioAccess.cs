@@ -332,7 +332,7 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Web
             Log(LogLevel.Info, "Audio processor task stopped");
         }
 
-        public async Task<bool> StartRecordingAudio(MicrophoneAudioReceivedEventHandler audioDataReceivedHandler)
+        public async Task<bool> StartRecordingAudio(MicrophoneAudioReceivedEventHandler audioDataReceivedHandler, AudioSampleRate targetSampleRate = AudioSampleRate.Rate24000)
         {
             try
             {
@@ -345,32 +345,32 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Web
 
                 // Reset playback session logging for new recording session
                 _playbackSessionLogged = false;
-                
+
                 if (_audioModule == null)
                 {
                     await InitAudio();
                 }
-                
+
                 if (_audioModule == null)
                 {
                     throw new InvalidOperationException("Audio module couldn't be initialized");
                 }
-                
+
                 // Set handler
                 _audioDataReceivedHandler = audioDataReceivedHandler;
-                
+
                 // Create the .NET reference if not already done
                 if (_dotNetReference == null)
                 {
                     _dotNetReference = DotNetObjectReference.Create(this);
                 }
-                
-                // Start recording in JavaScript with the selected device if available
+
+                // Start recording in JavaScript with the selected device and target sample rate
                 try
                 {
-                    Log(LogLevel.Info, "Starting recording with JS using dotNetReference");
-                    Log(LogLevel.Info, $"Using device ID: {_selectedMicrophoneId ?? "default"}");
-                    var result = await _audioModule.InvokeAsync<bool>("startRecording", _dotNetReference, 500, _selectedMicrophoneId); // 500ms upload interval, selected device ID
+                    var sampleRateHz = (int)targetSampleRate;
+                    Log(LogLevel.Info, $"Starting recording with JS - device: {_selectedMicrophoneId ?? "default"}, targetSampleRate: {sampleRateHz}Hz");
+                    var result = await _audioModule.InvokeAsync<bool>("startRecording", _dotNetReference, 500, _selectedMicrophoneId, sampleRateHz);
                     
                     if (result)
                     {
