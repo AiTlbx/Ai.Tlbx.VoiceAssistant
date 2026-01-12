@@ -14,6 +14,7 @@
     <GeneratePackageOnBuild Condition="'$(Configuration)' == 'Release'">true</GeneratePackageOnBuild>
     <PackageOutputPath>..\..\nupkg</PackageOutputPath>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
 
     <!-- AOT/Trimming Compatibility -->
     <IsAotCompatible>true</IsAotCompatible>
@@ -21,6 +22,10 @@
     <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
   </PropertyGroup>
    
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\Ai.Tlbx.VoiceAssistant\Ai.Tlbx.VoiceAssistant.csproj" />
   </ItemGroup>

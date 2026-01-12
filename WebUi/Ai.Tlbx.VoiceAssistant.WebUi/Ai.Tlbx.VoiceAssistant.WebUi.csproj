@@ -12,8 +12,13 @@
     <PackageTags>voiceassistant;ui;blazor;components</PackageTags>
     <GeneratePackageOnBuild Condition="'$(Configuration)' == 'Release'">true</GeneratePackageOnBuild>
     <PackageOutputPath>..\..\nupkg</PackageOutputPath>
-    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>    
+    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
 
   
   <ItemGroup>
