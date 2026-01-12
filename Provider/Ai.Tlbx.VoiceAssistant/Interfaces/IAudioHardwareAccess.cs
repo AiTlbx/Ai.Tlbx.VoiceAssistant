@@ -17,7 +17,7 @@ namespace Ai.Tlbx.VoiceAssistant.Interfaces
         /// Initializes the audio hardware and prepares it for recording and playback.
         /// </summary>
         /// <returns>A task representing the asynchronous initialization operation.</returns>
-        Task InitAudio();
+        Task InitAudioAsync();
 
         /// <summary>
         /// Starts recording audio from the microphone and sets up the handler for received audio data.
@@ -45,46 +45,46 @@ namespace Ai.Tlbx.VoiceAssistant.Interfaces
         /// Clears any pending audio in the queue and stops the current playback immediately.
         /// Used when the user interrupts the AI's response to ensure no buffered audio continues playing.
         /// </summary>
-        Task ClearAudioQueue();
+        Task ClearAudioQueueAsync();
 
         /// <summary>
         /// Gets a list of available microphone devices.
         /// </summary>
         /// <returns>A list of audio device information objects representing available microphones.</returns>
-        Task<List<AudioDeviceInfo>> GetAvailableMicrophones();
+        Task<List<AudioDeviceInfo>> GetAvailableMicrophonesAsync();
 
         /// <summary>
         /// Requests microphone permission from the user and gets a list of available microphone devices with labels.
         /// This method will explicitly request microphone permission and activate the microphone temporarily to get device labels.
         /// </summary>
         /// <returns>A list of audio device information objects representing available microphones with proper labels.</returns>
-        Task<List<AudioDeviceInfo>> RequestMicrophonePermissionAndGetDevices();
+        Task<List<AudioDeviceInfo>> RequestMicrophonePermissionAndGetDevicesAsync();
 
         /// <summary>
         /// Sets the microphone device to use for recording.
         /// </summary>
         /// <param name="deviceId">The ID of the microphone device to use.</param>
         /// <returns>True if the device was set successfully, false otherwise.</returns>
-        Task<bool> SetMicrophoneDevice(string deviceId);
+        Task<bool> SetMicrophoneDeviceAsync(string deviceId);
 
         /// <summary>
         /// Gets the ID of the currently selected microphone device.
         /// </summary>
         /// <returns>The ID of the currently selected microphone device, or null if none is selected.</returns>
-        Task<string?> GetCurrentMicrophoneDevice();
+        Task<string?> GetCurrentMicrophoneDeviceAsync();
 
         /// <summary>
         /// Sets the diagnostic logging level for the audio hardware implementation.
         /// </summary>
         /// <param name="level">The diagnostic level to set.</param>
         /// <returns>A task that resolves to true if the level was set successfully, false otherwise.</returns>
-        Task<bool> SetDiagnosticLevel(DiagnosticLevel level);
+        Task<bool> SetDiagnosticLevelAsync(DiagnosticLevel level);
 
         /// <summary>
         /// Gets the current diagnostic logging level.
         /// </summary>
         /// <returns>The current diagnostic level.</returns>
-        Task<DiagnosticLevel> GetDiagnosticLevel();
+        Task<DiagnosticLevel> GetDiagnosticLevelAsync();
 
         /// <summary>
         /// Sets the logging action for this hardware component.

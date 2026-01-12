@@ -57,7 +57,7 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Windows
             _logAction?.Invoke(level, $"[WindowsAudio] {message}");
         }
 
-        public Task InitAudio()
+        public Task InitAudioAsync()
         {
             if (_isInitialized)
             {
@@ -169,7 +169,7 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Windows
             {
                 if (!_isInitialized)
                 {
-                    await InitAudio();
+                    await InitAudioAsync();
                     if (!_isInitialized)
                     {
                         return false;
@@ -265,7 +265,7 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Windows
             return _audioChannel.Writer.TryWrite((base64EncodedPcm16Audio, sampleRate));
         }
 
-        public async Task ClearAudioQueue()
+        public async Task ClearAudioQueueAsync()
         {
             try
             {
@@ -327,7 +327,7 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Windows
             }
         }
 
-        public async Task<List<AudioDeviceInfo>> GetAvailableMicrophones()
+        public async Task<List<AudioDeviceInfo>> GetAvailableMicrophonesAsync()
         {
             var result = new List<AudioDeviceInfo>();
 
@@ -335,7 +335,7 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Windows
             {
                 if (!_isInitialized)
                 {
-                    await InitAudio();
+                    await InitAudioAsync();
                 }
 
                 int deviceCount = WaveInEvent.DeviceCount;
@@ -361,18 +361,18 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Windows
             return result;
         }
 
-        public async Task<List<AudioDeviceInfo>> RequestMicrophonePermissionAndGetDevices()
+        public async Task<List<AudioDeviceInfo>> RequestMicrophonePermissionAndGetDevicesAsync()
         {
-            return await GetAvailableMicrophones();
+            return await GetAvailableMicrophonesAsync();
         }
 
-        public async Task<bool> SetMicrophoneDevice(string deviceId)
+        public async Task<bool> SetMicrophoneDeviceAsync(string deviceId)
         {
             try
             {
                 if (!_isInitialized)
                 {
-                    await InitAudio();
+                    await InitAudioAsync();
                 }
 
                 if (int.TryParse(deviceId, out int deviceNumber))
@@ -406,7 +406,7 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Windows
             return false;
         }
 
-        public Task<string?> GetCurrentMicrophoneDevice()
+        public Task<string?> GetCurrentMicrophoneDeviceAsync()
         {
             return Task.FromResult<string?>(_selectedDeviceNumber.ToString());
         }
@@ -427,7 +427,7 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Windows
             {
                 if (!_isInitialized)
                 {
-                    await InitAudio();
+                    await InitAudioAsync();
                 }
 
                 Log(LogLevel.Info, "Starting mic test loopback");
@@ -642,7 +642,7 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Windows
             }
         }
 
-        public async Task<bool> SetDiagnosticLevel(DiagnosticLevel level)
+        public async Task<bool> SetDiagnosticLevelAsync(DiagnosticLevel level)
         {
             await Task.CompletedTask;
             _diagnosticLevel = level;
@@ -650,7 +650,7 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Windows
             return true;
         }
 
-        public async Task<DiagnosticLevel> GetDiagnosticLevel()
+        public async Task<DiagnosticLevel> GetDiagnosticLevelAsync()
         {
             await Task.CompletedTask;
             return _diagnosticLevel;

@@ -80,7 +80,7 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Linux
         /// <summary>
         /// Initializes the ALSA audio hardware and prepares it for recording and playback.
         /// </summary>
-        public async Task InitAudio()
+        public async Task InitAudioAsync()
         {
             if (_isInitialized)
             {
@@ -319,11 +319,11 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Linux
         /// <summary>
         /// Retrieves a list of available microphone devices through ALSA.
         /// </summary>
-        public async Task<List<AudioDeviceInfo>> GetAvailableMicrophones()
+        public async Task<List<AudioDeviceInfo>> GetAvailableMicrophonesAsync()
         {
             if (!_isInitialized)
             {
-                await InitAudio();
+                await InitAudioAsync();
             }
 
             if (_availableMicrophones != null)
@@ -476,20 +476,20 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Linux
             }
         }
 
-        public async Task<List<AudioDeviceInfo>> RequestMicrophonePermissionAndGetDevices()
+        public async Task<List<AudioDeviceInfo>> RequestMicrophonePermissionAndGetDevicesAsync()
         {
-            // On Linux, this is the same as GetAvailableMicrophones() since Linux doesn't have web-style permission prompts
-            return await GetAvailableMicrophones();
+            // On Linux, this is the same as GetAvailableMicrophonesAsync() since Linux doesn't have web-style permission prompts
+            return await GetAvailableMicrophonesAsync();
         }
 
         /// <summary>
         /// Gets the current microphone device identifier.
         /// </summary>
-        public Task<string?> GetCurrentMicrophoneDevice()
+        public Task<string?> GetCurrentMicrophoneDeviceAsync()
         {
             if (!_isInitialized)
             {
-                InitAudio().Wait();
+                InitAudioAsync().Wait();
             }
 
             return Task.FromResult<string?>(_currentMicrophoneId);
@@ -498,11 +498,11 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Linux
         /// <summary>
         /// Sets the microphone device to use for recording.
         /// </summary>
-        public async Task<bool> SetMicrophoneDevice(string deviceId)
+        public async Task<bool> SetMicrophoneDeviceAsync(string deviceId)
         {
             if (!_isInitialized)
             {
-                await InitAudio();
+                await InitAudioAsync();
             }
 
             try
@@ -516,7 +516,7 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Linux
                 Log(LogLevel.Info, $"Switching microphone device to: {deviceId}");
                 
                 // Check if device ID exists in available microphones
-                var availableMics = await GetAvailableMicrophones();
+                var availableMics = await GetAvailableMicrophonesAsync();
                 bool deviceExists = availableMics.Any(m => m.Id.Equals(deviceId, StringComparison.OrdinalIgnoreCase));
                 
                 if (!deviceExists)
@@ -591,7 +591,7 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Linux
         {
             if (!_isInitialized)
             {
-                await InitAudio();
+                await InitAudioAsync();
             }
 
             if (_isRecording)
@@ -842,7 +842,7 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Linux
             {
                 try
                 {
-                    InitAudio().Wait();
+                    InitAudioAsync().Wait();
                 }
                 catch (Exception ex)
                 {
@@ -980,11 +980,11 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Linux
         /// <summary>
         /// Clears any pending audio in the queue and stops the current playback
         /// </summary>
-        public async Task ClearAudioQueue()
+        public async Task ClearAudioQueueAsync()
         {
             if (!_isInitialized)
             {
-                await InitAudio();
+                await InitAudioAsync();
             }
 
             try
@@ -1261,7 +1261,7 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Linux
         /// </summary>
         /// <param name="level">The diagnostic level to set.</param>
         /// <returns>A task that resolves to true if the level was set successfully, false otherwise.</returns>
-        public async Task<bool> SetDiagnosticLevel(DiagnosticLevel level)
+        public async Task<bool> SetDiagnosticLevelAsync(DiagnosticLevel level)
         {
             await Task.CompletedTask;
             _diagnosticLevel = level;
@@ -1273,7 +1273,7 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Linux
         /// Gets the current diagnostic logging level.
         /// </summary>
         /// <returns>The current diagnostic level.</returns>
-        public async Task<DiagnosticLevel> GetDiagnosticLevel()
+        public async Task<DiagnosticLevel> GetDiagnosticLevelAsync()
         {
             await Task.CompletedTask;
             return _diagnosticLevel;

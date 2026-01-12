@@ -24,6 +24,9 @@
     <File Path="publish-nuget.ps1" />
     <File Path="README.md" />
   </Folder>
+  <Folder Name="/Tests/">
+    <Project Path="Tests/AotTest/AotTest.csproj" />
+  </Folder>
   <Folder Name="/WebUi/">
     <Project Path="WebUi/Ai.Tlbx.VoiceAssistant.WebUi/Ai.Tlbx.VoiceAssistant.WebUi.csproj" />
   </Folder>

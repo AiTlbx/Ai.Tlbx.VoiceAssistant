@@ -43,7 +43,7 @@ namespace Ai.Tlbx.VoiceAssistant.Demo.Linux
             try
             {
                 _audioDevice = new LinuxAudioDevice();
-                await _audioDevice.InitAudio();
+                await _audioDevice.InitAudioAsync();
                 logAction(LogLevel.Info, "Audio device initialized successfully");
 
 

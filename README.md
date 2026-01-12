@@ -126,7 +126,7 @@ var settings = new GoogleVoiceSettings { Voice = GeminiVoice.Puck };
 
 // xAI Grok
 var provider = factory.CreateXai(apiKey);
-var settings = new XaiVoiceSettings { Voice = XaiVoice.Sage };
+var settings = new XaiVoiceSettings { Voice = XaiVoice.Ara };
 ```
 
 Same `VoiceAssistant` API, same tool definitions — just swap the provider.
@@ -166,14 +166,140 @@ builder.Services.AddTransient<IVoiceTool, WeatherTool>();
 
 ---
 
+## Writing Custom Tools
+
+### Basic Pattern
+
+1. **Create a record for arguments** — use `[Description]` attributes for AI guidance
+2. **Extend `VoiceToolBase<TArgs>`** — add `[Description]` to the class itself
+3. **Implement `ExecuteAsync`** — return results via `ToolSuccessResult<T>`
+
+```csharp
+[Description("Search for products in the catalog")]
+public class ProductSearchTool : VoiceToolBase<ProductSearchTool.Args>
+{
+    public record Args(
+        [property: Description("Search query keywords")] string Query,
+        [property: Description("Maximum results to return")] int MaxResults = 10,
+        [property: Description("Filter by category")] string? Category = null
+    );
+
+    public override string Name => "search_products";
+
+    public override async Task<string> ExecuteAsync(Args args)
+    {
+        var products = await _catalogService.SearchAsync(args.Query, args.MaxResults, args.Category);
+
+        var result = new ToolSuccessResult<ProductSearchResult>(new ProductSearchResult
+        {
+            Products = products,
+            TotalFound = products.Count
+        });
+
+        return JsonSerializer.Serialize(result, YourJsonContext.Default.ToolSuccessResultProductSearchResult);
+    }
+}
+```
+
+### Required vs Optional Parameters
+
+- **Required**: No default value, non-nullable → AI must provide or ask user
+- **Optional**: Has default value OR nullable (`string?`) → AI can omit
+
+```csharp
+public record Args(
+    string RequiredParam,                    // Required - AI must provide
+    string OptionalWithDefault = "default",  // Optional - has default
+    string? OptionalNullable = null          // Optional - nullable
+);
+```
+
+### Returning Results
+
+Always use the provided result types for consistent AI interpretation:
+
+```csharp
+// Success with data
+var result = new ToolSuccessResult<YourDataType>(data);
+return JsonSerializer.Serialize(result, YourJsonContext.Default.ToolSuccessResultYourDataType);
+
+// Error
+return CreateErrorResult("Something went wrong");
+```
+
+### AOT Compatibility
+
+For Native AOT or Blazor WebAssembly with trimming, reflection-based JSON serialization won't work. You need source-generated JSON contexts.
+
+**Step 1: Create a JSON context for your tool types**
+
+```csharp
+[JsonSerializable(typeof(ToolSuccessResult<ProductSearchResult>))]
+[JsonSerializable(typeof(ProductSearchTool.Args), TypeInfoPropertyName = "ProductSearchToolArgs")]
+[JsonSourceGenerationOptions(
+    PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower,
+    DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)]
+public partial class MyToolsJsonContext : JsonSerializerContext
+{
+}
+```
+
+**Step 2: Register the type info with your tool**
+
+```csharp
+// In your DI setup or tool initialization
+var tool = new ProductSearchTool();
+tool.SetJsonTypeInfo(MyToolsJsonContext.Default.ProductSearchToolArgs);
+```
+
+**Step 3: Use source-generated serialization in ExecuteAsync**
+
+```csharp
+return JsonSerializer.Serialize(result, MyToolsJsonContext.Default.ToolSuccessResultProductSearchResult);
+```
+
+### AOT Checklist
+
+| Item | Non-AOT | AOT |
+|------|---------|-----|
+| Args deserialization | Automatic (reflection) | Call `SetJsonTypeInfo()` |
+| Result serialization | Can use `JsonSerializer.Serialize<T>()` | Must use `JsonSerializer.Serialize(value, context.TypeInfo)` |
+| Enum handling | Automatic | Include enum types in `[JsonSerializable]` |
+| Nested types | Automatic | Include all nested types in context |
+
+### Dependency Injection with Tools
+
+Tools can use constructor injection:
+
+```csharp
+public class DatabaseTool : VoiceToolBase<DatabaseTool.Args>
+{
+    private readonly IDbConnection _db;
+
+    public DatabaseTool(IDbConnection db) => _db = db;
+
+    // ...
+}
+
+// Registration
+builder.Services.AddTransient<IVoiceTool, DatabaseTool>();
+```
+
+---
+
 ## Key Features
 
-### Noise-Cancelling WebAudio
-The `Hardware.Web` package includes an AudioWorklet-based noise gate that filters background noise before sending to the AI — cleaner input without external dependencies.
+### Studio-Quality Audio Processing
+The `Hardware.Web` package includes an AudioWorklet-based audio chain:
+- **48kHz capture** with browser echo cancellation, noise suppression, and auto gain
+- **De-esser** (high-shelf EQ) to tame sibilance before amplification
+- **Compressor** (8:1 ratio) for consistent loudness across whispers and shouts
+- **Anti-aliasing filter** (Butterworth LPF) before downsampling
+- **Provider-specific sample rates**: 16kHz for Google, 24kHz for OpenAI/xAI
 
 ### Provider-Agnostic Architecture
 Write once, run on any provider. The orchestrator handles:
-- Audio format conversion (PCM 16-bit @ 24kHz)
+- Audio format conversion (PCM 16-bit, provider-specific sample rates)
 - Tool schema translation per provider
 - Streaming audio playback with interruption support
 - Chat history management
@@ -199,7 +325,7 @@ dotnet add package Ai.Tlbx.VoiceAssistant.Hardware.Linux
 
 ```csharp
 var provider = new OpenAiVoiceProvider(apiKey, logger);
-var hardware = new WindowsAudioAccess(logger); // or LinuxAudioAccess
+var hardware = new WindowsAudioHardware(); // or LinuxAudioDevice
 
 var assistant = new VoiceAssistant(provider, hardware);
 await assistant.StartAsync(settings);
@@ -212,7 +338,7 @@ await assistant.StopAsync();
 
 ## Requirements
 
-- **.NET 9.0 or 10.0**
+- **.NET 9.0 or .NET 10.0**
 - **API Key:** [OpenAI](https://platform.openai.com/api-keys), [Google AI Studio](https://aistudio.google.com/apikey), or [xAI](https://console.x.ai/)
 - **Web:** Modern browser with microphone permission (HTTPS or localhost)
 - **Windows:** Windows 10+

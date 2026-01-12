@@ -260,7 +260,7 @@ public class Program
         {
             Debug.WriteLine("[TUI] Loading microphones...");
             var tempHardware = new WindowsAudioHardware();
-            _microphones = await tempHardware.GetAvailableMicrophones();
+            _microphones = await tempHardware.GetAvailableMicrophonesAsync();
 
             var micNames = _microphones.Select(m => m.IsDefault ? $"* {m.Name}" : m.Name).ToList();
             if (micNames.Count == 0)
@@ -293,7 +293,7 @@ public class Program
 
         var mic = _microphones[_micCombo.SelectedItem];
         Debug.WriteLine($"[TUI] Switching to microphone: {mic.Name}");
-        await _audioHardware.SetMicrophoneDevice(mic.Id);
+        await _audioHardware.SetMicrophoneDeviceAsync(mic.Id);
     }
 
     private static async Task CleanupAsync()
@@ -367,7 +367,7 @@ public class Program
             if (_micCombo != null && _micCombo.SelectedItem >= 0 && _micCombo.SelectedItem < _microphones.Count)
             {
                 var mic = _microphones[_micCombo.SelectedItem];
-                await _audioHardware.SetMicrophoneDevice(mic.Id);
+                await _audioHardware.SetMicrophoneDeviceAsync(mic.Id);
             }
 
             // Create a temporary VoiceAssistant just for mic testing (no provider needed for test)
@@ -428,7 +428,7 @@ public class Program
             if (_micCombo != null && _micCombo.SelectedItem >= 0 && _micCombo.SelectedItem < _microphones.Count)
             {
                 var mic = _microphones[_micCombo.SelectedItem];
-                await _audioHardware.SetMicrophoneDevice(mic.Id);
+                await _audioHardware.SetMicrophoneDeviceAsync(mic.Id);
                 Debug.WriteLine($"[TUI] Using microphone: {mic.Name}");
             }
 

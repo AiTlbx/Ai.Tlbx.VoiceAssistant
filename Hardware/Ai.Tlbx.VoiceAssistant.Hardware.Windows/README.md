@@ -1,19 +1,32 @@
-# Ai.Tlbx.RealTimeAudio.Hardware.Windows
+# Ai.Tlbx.VoiceAssistant.Hardware.Windows
 
-Windows-specific hardware integration for real-time audio processing. This package provides components for accessing and utilizing audio hardware on Windows platforms for real-time applications.
+Native Windows audio hardware support for the AI Voice Assistant Toolkit.
+
+[![NuGet](https://img.shields.io/nuget/v/Ai.Tlbx.VoiceAssistant.Hardware.Windows.svg)](https://www.nuget.org/packages/Ai.Tlbx.VoiceAssistant.Hardware.Windows/)
 
 ## Installation
 
+```bash
+dotnet add package Ai.Tlbx.VoiceAssistant.Hardware.Windows
 ```
-dotnet add package Ai.Tlbx.RealTimeAudio.Hardware.Windows
-```
+
+## Requirements
+
+- Windows 10 or later
+- .NET 9.0 or .NET 10.0
 
 ## Usage
 
 ```csharp
-// Example usage code will go here
+var hardware = new WindowsAudioHardware();
+var provider = new OpenAiVoiceProvider(apiKey, logger);
+
+var assistant = new VoiceAssistant(provider, hardware);
+await assistant.StartAsync(settings);
 ```
 
-## License
+## Full Documentation
 
-MIT 
+See the main package for complete documentation:
+
+**[Ai.Tlbx.VoiceAssistant on NuGet](https://www.nuget.org/packages/Ai.Tlbx.VoiceAssistant#readme-body-tab)**

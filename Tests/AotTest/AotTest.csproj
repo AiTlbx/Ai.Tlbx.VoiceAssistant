@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+
+    <!-- Strict AOT/Trimming settings -->
+    <PublishAot>true</PublishAot>
+    <IsAotCompatible>true</IsAotCompatible>
+    <IsTrimmable>true</IsTrimmable>
+    <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
+    <TrimmerSingleWarn>false</TrimmerSingleWarn>
+    <SuppressTrimAnalysisWarnings>false</SuppressTrimAnalysisWarnings>
+    <EnableAotAnalyzer>true</EnableAotAnalyzer>
+    <IlcTreatWarningsAsErrors>true</IlcTreatWarningsAsErrors>
+
+    <!-- Treat all trimming/AOT warnings as errors during build -->
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <WarningsAsErrors>IL2026;IL2046;IL2050;IL2055;IL2057;IL2060;IL2070;IL2072;IL2075;IL2077;IL3050;IL3051;IL3053</WarningsAsErrors>
+    <NoWarn></NoWarn>
+
+    <!-- Force full analysis -->
+    <TrimMode>full</TrimMode>
+    <InvariantGlobalization>true</InvariantGlobalization>
+
+    <!-- Use environment's C++ tools instead of ILC's auto-discovery -->
+    <IlcUseEnvironmentalTools>true</IlcUseEnvironmentalTools>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Reference all packages under test -->
+    <ProjectReference Include="..\..\Provider\Ai.Tlbx.VoiceAssistant\Ai.Tlbx.VoiceAssistant.csproj" />
+    <ProjectReference Include="..\..\Provider\Ai.Tlbx.VoiceAssistant.Provider.OpenAi\Ai.Tlbx.VoiceAssistant.Provider.OpenAi.csproj" />
+    <ProjectReference Include="..\..\Provider\Ai.Tlbx.VoiceAssistant.Provider.Google\Ai.Tlbx.VoiceAssistant.Provider.Google.csproj" />
+    <ProjectReference Include="..\..\Provider\Ai.Tlbx.VoiceAssistant.Provider.XAi\Ai.Tlbx.VoiceAssistant.Provider.XAi.csproj" />
+    <ProjectReference Include="..\..\Hardware\Ai.Tlbx.VoiceAssistant.Hardware.Web\Ai.Tlbx.VoiceAssistant.Hardware.Web.csproj" />
+  </ItemGroup>
+
+</Project>

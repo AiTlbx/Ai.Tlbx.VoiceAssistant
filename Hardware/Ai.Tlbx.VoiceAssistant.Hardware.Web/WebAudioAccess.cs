@@ -111,7 +111,7 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Web
             }
         }
 
-        public async Task InitAudio()
+        public async Task InitAudioAsync()
         {
             try
             {
@@ -348,7 +348,7 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Web
 
                 if (_audioModule == null)
                 {
-                    await InitAudio();
+                    await InitAudioAsync();
                 }
 
                 if (_audioModule == null)
@@ -390,7 +390,7 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Web
                     Log(LogLevel.Error, $"Exception while starting recording: {ex.Message}");
                     
                     // Get diagnostic information when recording fails
-                    var diagnostics = await GetDiagnostics();
+                    var diagnostics = await GetDiagnosticsAsync();
                     if (diagnostics != null)
                     {
                         Log(LogLevel.Error, $"Diagnostics when recording failed: {diagnostics}");
@@ -406,7 +406,7 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Web
                 Log(LogLevel.Error, $"Exception in StartRecordingAudio: {ex.Message}");
                 
                 // Get diagnostic information when recording fails completely
-                var diagnostics = await GetDiagnostics();
+                var diagnostics = await GetDiagnosticsAsync();
                 if (diagnostics != null)
                 {
                     Log(LogLevel.Error, $"Diagnostics when recording failed completely: {diagnostics}");
@@ -499,7 +499,7 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Web
             _audioDataReceivedHandler = null;
         }
 
-        public async Task ClearAudioQueue()
+        public async Task ClearAudioQueueAsync()
         {
             // Drain the channel
             int queuedItems = 0;
@@ -533,7 +533,7 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Web
             }
         }
 
-        public async Task<List<AudioDeviceInfo>> GetAvailableMicrophones()
+        public async Task<List<AudioDeviceInfo>> GetAvailableMicrophonesAsync()
         {
             if (_audioModule == null)
             {
@@ -563,11 +563,11 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Web
             }
         }
 
-        public async Task<List<AudioDeviceInfo>> RequestMicrophonePermissionAndGetDevices()
+        public async Task<List<AudioDeviceInfo>> RequestMicrophonePermissionAndGetDevicesAsync()
         {
             if (_audioModule == null)
             {
-                await InitAudio();
+                await InitAudioAsync();
             }
 
             if (_audioModule == null)
@@ -592,7 +592,7 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Web
             }
         }
 
-        public async Task<bool> SetMicrophoneDevice(string deviceId)
+        public async Task<bool> SetMicrophoneDeviceAsync(string deviceId)
         {
             if (string.IsNullOrEmpty(deviceId))
             {
@@ -602,7 +602,7 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Web
 
             if (_audioModule == null)
             {
-                await InitAudio();
+                await InitAudioAsync();
             }
 
             if (_audioModule == null)
@@ -625,7 +625,7 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Web
             }
         }
 
-        public async Task<string?> GetCurrentMicrophoneDevice()
+        public async Task<string?> GetCurrentMicrophoneDeviceAsync()
         {
             await Task.CompletedTask;
             return _selectedMicrophoneId;
@@ -635,7 +635,7 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Web
         /// Gets comprehensive diagnostic information from the JavaScript audio system.
         /// </summary>
         /// <returns>JSON string containing diagnostic information or null if unavailable.</returns>
-        public async Task<string?> GetDiagnostics()
+        public async Task<string?> GetDiagnosticsAsync()
         {
             if (_audioModule == null)
             {
@@ -661,7 +661,7 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Web
         /// </summary>
         /// <param name="level">The diagnostic level to set.</param>
         /// <returns>True if successful, false otherwise.</returns>
-        public async Task<bool> SetDiagnosticLevel(DiagnosticLevel level)
+        public async Task<bool> SetDiagnosticLevelAsync(DiagnosticLevel level)
         {
             if (_audioModule == null)
             {
@@ -689,7 +689,7 @@ namespace Ai.Tlbx.VoiceAssistant.Hardware.Web
         /// Gets the current diagnostic logging level.
         /// </summary>
         /// <returns>The current diagnostic level.</returns>
-        public async Task<DiagnosticLevel> GetDiagnosticLevel()
+        public async Task<DiagnosticLevel> GetDiagnosticLevelAsync()
         {
             await Task.CompletedTask;
             return _diagnosticLevel;

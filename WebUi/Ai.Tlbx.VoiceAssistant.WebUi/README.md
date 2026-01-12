@@ -1,216 +1,41 @@
 # Ai.Tlbx.VoiceAssistant.WebUi
 
-This Razor Class Library (RCL) provides reusable UI components for real-time audio applications built with the Ai.Tlbx.RealTimeAudio library.
+Pre-built Blazor UI components for the AI Voice Assistant Toolkit.
 
-## Available Components
+[![NuGet](https://img.shields.io/nuget/v/Ai.Tlbx.VoiceAssistant.WebUi.svg)](https://www.nuget.org/packages/Ai.Tlbx.VoiceAssistant.WebUi/)
 
-### Voice Chat
-- **AiTalkControl** - Start/stop voice recording with visual indicators
-- **ChatWidget** - Display conversation history with message type styling
-- **VoiceSelect** - Select from available AI voices
+## Installation
 
-### Audio Input
-- **MicrophoneSelect** - Microphone device selection with permission request
-- **MicTestWidget** - Test microphone with visual level indicator
+```bash
+dotnet add package Ai.Tlbx.VoiceAssistant.WebUi
+```
 
-### Status & Feedback
-- **StatusWidget** - Connection status and error display
-- **ToastNotification** - Toast notifications for non-blocking updates
-- **DiagnosticsWidget** - Real-time audio diagnostics (buffer, latency, etc.)
+## Components
 
-### Layout
-- **AppLayout** - Base layout component with CSS imports
-- **TwoColumnLayout** - Responsive two-column layout for chat applications
+- `AiTalkControl` — Talk/Stop button with visual feedback
+- `VoiceSelect` — Voice selection dropdown
+- `VoiceSpeedSlider` — Talking speed control
+- `MicrophoneSelect` — Microphone device picker
+- `StatusWidget` — Connection status display
+- `ChatWidget` — Conversation history view
 
 ## Usage
 
-### Installation
-
-1. Add a project reference to this library:
-   ```
-   dotnet add reference ../path/to/Ai.Tlbx.VoiceAssistant.WebUi/Ai.Tlbx.VoiceAssistant.WebUi.csproj
-   ```
-
-2. Import the components in your _Imports.razor:
-   ```razor
-   @using Ai.Tlbx.VoiceAssistant.WebUi.Components
-   ```
-
-3. Include the CSS in your main layout:
-   ```html
-   <link rel="stylesheet" href="_content/Ai.Tlbx.VoiceAssistant.WebUi/css/shared.css" />
-   ```
-
-### Component Examples
-
-#### OpenAI API Access Configuration
-
-To use the components with OpenAI, provide the OpenAiRealTimeApiAccess service via dependency injection:
-
 ```razor
-@inject OpenAiRealTimeApiAccess rta
+@using Ai.Tlbx.VoiceAssistant.WebUi.Components
 
-<CascadingValue Value="rta">
-    <!-- Your components here -->
-</CascadingValue>
-```
+<AiTalkControl OnStartTalking="StartSession"
+               OnStopTalking="StopSession"
+               IsTalking="@assistant.IsRecording" />
 
-#### AiTalkControl
+<VoiceSelect SelectedVoice="@selectedVoice"
+             SelectedVoiceChanged="OnVoiceChanged" />
 
-```razor
-<AiTalkControl 
-    OnStartTalking="StartSession" 
-    OnStopTalking="StopSession" 
-    IsTalking="rta.IsRecording" 
-    Loading="rta.IsConnecting" />
-```
-
-#### MicrophoneSelect
-
-```razor
-<MicrophoneSelect 
-    AvailableMicrophones="availableMicrophones" 
-    SelectedMicrophoneId="selectedMicrophoneId" 
-    MicPermissionGranted="micPermissionGranted" 
-    OnRequestPermission="RequestMicrophonePermission" />
-```
-
-#### ChatWidget
-
-```razor
 <ChatWidget />
 ```
 
-## Styling
+## Full Documentation
 
-The components use a combination of Tailwind-based utility classes and component-specific CSS for styling. You can customize the appearance by overriding the CSS classes in your application.
+See the main package for complete documentation:
 
-## JavaScript Dependencies
-
-The components in this library require a JavaScript object called `audioInterop` with the following methods:
-
-```javascript
-window.audioInterop = {
-    initAudioWithUserInteraction, // Initialize audio context with user gesture
-    getAvailableMicrophones,      // Get list of audio input devices
-    startRecording,               // Start capturing audio from microphone
-    stopRecording,                // Stop capturing audio
-    playAudio,                    // Play audio data (PCM format)
-    stopAudioPlayback,            // Stop playback and clear buffers
-    setDotNetReference,           // Set .NET reference for callbacks
-    startMicTest,                 // Start microphone test (loopback)
-    stopMicTest                   // Stop microphone test
-};
-```
-
-## Setup Instructions
-
-1. **Add Project Reference**: Include this RCL in your project by adding a reference to `Ai.Tlbx.VoiceAssistant.WebUi.csproj`.
-   ```xml
-   <ProjectReference Include="../WebUi/Ai.Tlbx.VoiceAssistant.WebUi/Ai.Tlbx.VoiceAssistant.WebUi.csproj" />
-   ```
-2. **Register Static Assets**: Ensure your application serves static files from the RCL by adding the following to your `Program.cs` or `Startup.cs`:
-   ```csharp
-   app.UseStaticFiles();
-   app.UseStaticFiles(new StaticFileOptions
-   {
-       FileProvider = new PhysicalFileProvider(Path.Combine(Directory.GetCurrentDirectory(), "wwwroot")),
-       RequestPath = "/Ai.Tlbx.VoiceAssistant.WebUi"
-   });
-   ```
-3. **Include CSS**: Add the shared CSS in your layout file (`_Layout.cshtml` or `App.razor`):
-   ```html
-   <link href="Ai.Tlbx.VoiceAssistant.WebUi/css/shared.css" rel="stylesheet" />
-   ```
-4. **Register AudioInteropService**: Add to your service collection
-   ```csharp
-   builder.Services.AddScoped<IAudioInteropService, AudioInteropService>();
-   ```
-
-## Component Usage
-
-### ChatWidget
-Used for chat interactions with real-time audio.
-```razor
-<ChatWidget OnMessageSent="HandleMessageSent" />
-
-@code {
-    private async Task HandleMessageSent(string message)
-    {
-        // Process the sent message
-        Debug.WriteLine($"Message sent: {message}");
-    }
-}
-```
-
-### AiTalkControl
-Controls for starting and stopping AI talk interactions.
-```razor
-<AiTalkControl OnStartTalking="StartAiTalk" OnStopTalking="StopAiTalk" Loading="IsConnecting" />
-
-@code {
-    private async Task StartAiTalk()
-    {
-        // Start AI interaction logic
-        Debug.WriteLine("AI talk started");
-    }
-
-    private async Task StopAiTalk()
-    {
-        // Stop AI interaction logic
-        Debug.WriteLine("AI talk stopped");
-    }
-}
-```
-
-### MicTestWidget
-UI for testing microphone input.
-```razor
-<MicTestWidget OnStartTest="StartMicTest" Loading="IsTesting" />
-
-@code {
-    private async Task StartMicTest()
-    {
-        // Start microphone test logic
-        Debug.WriteLine("Microphone test started");
-    }
-}
-```
-
-### StatusWidget
-Displays status and error messages.
-```razor
-<StatusWidget ConnectionStatus="Status" Error="ErrorMessage" IsMicrophoneTesting="IsTesting" />
-```
-
-### VoiceSelect
-Select from a list of available voices.
-```razor
-<VoiceSelect SelectedVoice="Voice" SelectedVoiceChanged="VoiceChanged" Disabled="false" />
-```
-
-### DiagnosticsWidget
-Displays audio diagnostic information (buffer levels, latency, etc.)
-```razor
-<DiagnosticsWidget InitiallyExpanded="false" 
-                   BufferLevel="BufferLevel" 
-                   Latency="Latency" 
-                   SampleRate="SampleRate" 
-                   AudioChunksProcessed="Chunks" />
-```
-
-### ToastNotification
-Displays non-blocking notifications to the user.
-```razor
-<ToastNotification @ref="toastNotification" AutoHideMilliseconds="5000" />
-
-@code {
-    private ToastNotification? toastNotification;
-    
-    private async Task ShowMessage() {
-        if (toastNotification != null) {
-            await toastNotification.ShowAsync("Message", "Title", ToastNotification.ToastType.Info);
-        }
-    }
-}
-``` 
+**[Ai.Tlbx.VoiceAssistant on NuGet](https://www.nuget.org/packages/Ai.Tlbx.VoiceAssistant#readme-body-tab)**

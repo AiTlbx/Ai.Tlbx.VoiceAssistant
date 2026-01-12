@@ -185,7 +185,7 @@ namespace Ai.Tlbx.VoiceAssistant
                 cancellationToken.ThrowIfCancellationRequested();
                 
                 // Initialize hardware
-                await _hardwareAccess.InitAudio();
+                await _hardwareAccess.InitAudioAsync();
                 
                 // Start recording with audio callback handler, using provider's required sample rate
                 bool recordingStarted = await _hardwareAccess.StartRecordingAudio(OnAudioDataReceived, _provider.RequiredInputSampleRate);
@@ -223,7 +223,7 @@ namespace Ai.Tlbx.VoiceAssistant
                 IsRecording = false;
                 
                 // Clear any queued audio immediately
-                await _hardwareAccess.ClearAudioQueue();
+                await _hardwareAccess.ClearAudioQueueAsync();
 
                 // Then disconnect from provider (if connected)
                 if (_provider != null)
@@ -259,7 +259,7 @@ namespace Ai.Tlbx.VoiceAssistant
                 }
 
                 // Clear any pending audio to stop playback immediately
-                await _hardwareAccess.ClearAudioQueue();
+                await _hardwareAccess.ClearAudioQueueAsync();
                 
                 _logAction(LogLevel.Info, "Interrupt signal sent to AI provider and audio queue cleared");
             }
@@ -285,7 +285,7 @@ namespace Ai.Tlbx.VoiceAssistant
                 ReportStatus("Testing speakers...");
                 
                 // Initialize audio hardware first
-                await _hardwareAccess.InitAudio();
+                await _hardwareAccess.InitAudioAsync();
                 
                 // Play initial beep to test speakers (440 Hz for 200ms)
                 _logAction(LogLevel.Info, "Playing initial beep to test speakers");
@@ -425,7 +425,7 @@ namespace Ai.Tlbx.VoiceAssistant
         {
             try
             {
-                return await _hardwareAccess.GetAvailableMicrophones();
+                return await _hardwareAccess.GetAvailableMicrophonesAsync();
             }
             catch (Exception ex)
             {
@@ -477,7 +477,7 @@ namespace Ai.Tlbx.VoiceAssistant
                 {
                     try
                     {
-                        await _hardwareAccess.ClearAudioQueue();
+                        await _hardwareAccess.ClearAudioQueueAsync();
                         _logAction(LogLevel.Info, "Audio queue cleared due to interruption");
                     }
                     catch (Exception ex)
@@ -499,7 +499,7 @@ namespace Ai.Tlbx.VoiceAssistant
             {
                 try
                 {
-                    await _hardwareAccess.ClearAudioQueue();
+                    await _hardwareAccess.ClearAudioQueueAsync();
                     // Audio queue cleared for interruption - normal operation
                 }
                 catch (Exception ex)

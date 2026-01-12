@@ -1,31 +1,36 @@
-# Linux Audio Hardware for Ai.Tlbx.RealTimeAudio
+# Ai.Tlbx.VoiceAssistant.Hardware.Linux
 
-This package provides Linux support for the Ai.Tlbx.RealTimeAudio library by implementing the `IAudioHardwareAccess` interface.
+Native Linux audio hardware support (ALSA) for the AI Voice Assistant Toolkit.
 
-## Requirements
-
-- .NET 9.0 or later
-- Linux operating system with ALSA support
-- ALSA development libraries (`libasound2` package on Debian/Ubuntu-based distributions)
+[![NuGet](https://img.shields.io/nuget/v/Ai.Tlbx.VoiceAssistant.Hardware.Linux.svg)](https://www.nuget.org/packages/Ai.Tlbx.VoiceAssistant.Hardware.Linux/)
 
 ## Installation
 
-To use this package, install the ALSA libraries on your Linux system:
-
 ```bash
-# Debian/Ubuntu
-sudo apt install libasound2
-
-# Fedora
-sudo dnf install alsa-lib
-
-# Arch Linux
-sudo pacman -S alsa-lib
+dotnet add package Ai.Tlbx.VoiceAssistant.Hardware.Linux
 ```
 
-## Features
+## Requirements
 
-- Audio input from the default or selected microphone
-- Audio output to the default or selected speakers
-- Device enumeration for available audio devices
-- PCM16 audio format compatibility with OpenAI's API 
+- Linux with ALSA support
+- .NET 9.0 or .NET 10.0
+- ALSA development libraries:
+  ```bash
+  sudo apt-get install libasound2-dev
+  ```
+
+## Usage
+
+```csharp
+var hardware = new LinuxAudioDevice();
+var provider = new OpenAiVoiceProvider(apiKey, logger);
+
+var assistant = new VoiceAssistant(provider, hardware);
+await assistant.StartAsync(settings);
+```
+
+## Full Documentation
+
+See the main package for complete documentation:
+
+**[Ai.Tlbx.VoiceAssistant on NuGet](https://www.nuget.org/packages/Ai.Tlbx.VoiceAssistant#readme-body-tab)**
