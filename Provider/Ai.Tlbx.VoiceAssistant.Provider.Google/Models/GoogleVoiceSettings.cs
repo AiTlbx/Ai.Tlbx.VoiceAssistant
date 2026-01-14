@@ -20,8 +20,9 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.Google.Models
 
         /// <summary>
         /// The speed of the AI model's spoken response.
-        /// Note: Google's Live API doesn't have a direct TalkingSpeed parameter.
-        /// This is provided for interface compatibility but may not be fully supported.
+        /// WARNING: Google's Live API does not support speech rate control.
+        /// This property exists only for IVoiceSettings interface compatibility.
+        /// To influence speech pace, include instructions like "speak slowly" in your prompt.
         /// </summary>
         public double TalkingSpeed { get; set; } = 1.0;
 

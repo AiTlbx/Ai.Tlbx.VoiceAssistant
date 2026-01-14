@@ -117,7 +117,7 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.XAi
             }
 
             _settings = xaiSettings;
-            _logAction(LogLevel.Info, $"Settings configured - Voice: {_settings.Voice}");
+            _logAction(LogLevel.Info, $"Settings configured - Voice: {_settings.Voice}, Speed: {_settings.TalkingSpeed}");
 
             try
             {
@@ -191,7 +191,7 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.XAi
             }
 
             _settings = xaiSettings;
-            _logAction(LogLevel.Info, $"Settings configured - Voice: {_settings.Voice}");
+            _logAction(LogLevel.Info, $"Settings configured - Voice: {_settings.Voice}, Speed: {_settings.TalkingSpeed}");
 
             if (IsConnected)
             {
@@ -348,7 +348,8 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.XAi
                             {
                                 Type = _settings.AudioFormatType,
                                 Rate = _settings.AudioSampleRate
-                            }
+                            },
+                            Speed = _settings.TalkingSpeed
                         }
                     },
                     TurnDetection = _settings.TurnDetection != null

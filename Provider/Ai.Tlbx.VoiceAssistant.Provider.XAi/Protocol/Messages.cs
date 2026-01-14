@@ -200,6 +200,9 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.XAi.Protocol
     {
         [JsonPropertyName("format")]
         public XaiAudioFormatConfig? Format { get; set; }
+
+        [JsonPropertyName("speed")]
+        public double? Speed { get; set; }
     }
 
     public class XaiAudioFormatConfig
