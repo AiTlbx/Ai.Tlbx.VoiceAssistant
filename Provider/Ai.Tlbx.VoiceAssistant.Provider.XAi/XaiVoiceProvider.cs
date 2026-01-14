@@ -88,6 +88,11 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.XAi
         public Action? OnInterruptDetected { get; set; }
 
         /// <summary>
+        /// Callback invoked when usage data is received from the AI provider.
+        /// </summary>
+        public Action<UsageReport>? OnUsageReceived { get; set; }
+
+        /// <summary>
         /// Initializes a new instance of the <see cref="XaiVoiceProvider"/> class.
         /// </summary>
         /// <param name="apiKey">The xAI API key. If null, will try to get from environment variable XAI_API_KEY.</param>
@@ -671,6 +676,25 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.XAi
         {
             _hasActiveResponse = false;
             _logAction(LogLevel.Info, "Response completed");
+
+            // Parse usage from response.done event (OpenAI-compatible format)
+            if (root.TryGetProperty("response", out var response) &&
+                response.TryGetProperty("usage", out var usage))
+            {
+                var report = new UsageReport
+                {
+                    ProviderId = "xai",
+                    InputTokens = usage.TryGetProperty("input_tokens", out var it) ? it.GetInt32() : null,
+                    OutputTokens = usage.TryGetProperty("output_tokens", out var ot) ? ot.GetInt32() : null,
+                    InputAudioTokens = usage.TryGetProperty("input_audio_tokens", out var iat) ? iat.GetInt32() : null,
+                    OutputAudioTokens = usage.TryGetProperty("output_audio_tokens", out var oat) ? oat.GetInt32() : null,
+                    IsEstimated = false
+                };
+
+                _logAction(LogLevel.Info, $"Usage: in={report.TotalInputTokens}, out={report.TotalOutputTokens}, audio_in={report.InputAudioTokens}, audio_out={report.OutputAudioTokens}");
+                OnUsageReceived?.Invoke(report);
+            }
+
             await Task.CompletedTask;
         }
 

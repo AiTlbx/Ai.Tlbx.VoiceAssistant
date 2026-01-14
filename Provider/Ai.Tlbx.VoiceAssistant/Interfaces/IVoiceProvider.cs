@@ -84,5 +84,11 @@ namespace Ai.Tlbx.VoiceAssistant.Interfaces
         /// Callback invoked when interruption is detected and audio needs to be cleared.
         /// </summary>
         Action? OnInterruptDetected { get; set; }
+
+        /// <summary>
+        /// Callback invoked when usage data is received from the AI provider.
+        /// Reports token/audio usage for billing and monitoring.
+        /// </summary>
+        Action<UsageReport>? OnUsageReceived { get; set; }
     }
 }

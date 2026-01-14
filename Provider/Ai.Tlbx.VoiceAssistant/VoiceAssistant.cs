@@ -16,6 +16,7 @@ namespace Ai.Tlbx.VoiceAssistant
         private readonly IAudioHardwareAccess _hardwareAccess;
         private readonly IVoiceProvider? _provider;
         private readonly ChatHistoryManager _chatHistory;
+        private readonly UsageManager _usageManager;
         private readonly Action<LogLevel, string> _logAction;
         
         // State management
@@ -25,6 +26,8 @@ namespace Ai.Tlbx.VoiceAssistant
         private bool _isMicrophoneTesting = false;
         private string? _lastErrorMessage = null;
         private string _connectionStatus = string.Empty;
+        private DateTime? _sessionStartTime = null;
+        private DateTime _lastUsageUpdateTime = DateTime.MinValue;
         
         // Static cache for generated beeps (lazy-initialized)
         private static readonly Dictionary<(int frequency, int duration, int sampleRate), string> _beepCache = new();
@@ -44,6 +47,19 @@ namespace Ai.Tlbx.VoiceAssistant
         /// Callback that fires when the list of microphone devices changes.
         /// </summary>
         public Action<List<AudioDeviceInfo>>? OnMicrophoneDevicesChanged { get; set; }
+
+        /// <summary>
+        /// Callback that fires when usage data is received from the AI provider.
+        /// For per-response granular token data.
+        /// </summary>
+        public Action<UsageReport>? OnUsageReceived { get; set; }
+
+        /// <summary>
+        /// Callback that fires with cumulative session usage (tokens + duration).
+        /// Fires on: token usage received, every minute elapsed, and session end.
+        /// Subscribe to this single callback for unified usage tracking.
+        /// </summary>
+        public Action<SessionUsageUpdate>? OnSessionUsageUpdated { get; set; }
 
         // Public properties
         /// <summary>
@@ -82,6 +98,45 @@ namespace Ai.Tlbx.VoiceAssistant
         public IReadOnlyList<ChatMessage> ChatHistory => _chatHistory.GetMessages();
 
         /// <summary>
+        /// Gets the usage reports as a read-only list.
+        /// </summary>
+        public IReadOnlyList<UsageReport> UsageReports => _usageManager.GetReports();
+
+        /// <summary>
+        /// Gets the total tokens used in the current session.
+        /// </summary>
+        public int TotalTokensUsed => _usageManager.TotalTokens;
+
+        /// <summary>
+        /// Gets the total audio input tokens used in the current session.
+        /// </summary>
+        public int TotalAudioInputTokens => _usageManager.TotalAudioInputTokens;
+
+        /// <summary>
+        /// Gets the total audio output tokens used in the current session.
+        /// </summary>
+        public int TotalAudioOutputTokens => _usageManager.TotalAudioOutputTokens;
+
+        /// <summary>
+        /// Gets a value indicating whether a session is currently active.
+        /// </summary>
+        public bool IsSessionActive => _sessionStartTime.HasValue;
+
+        /// <summary>
+        /// Gets the session start time (UTC) measured locally, or null if no session is active.
+        /// </summary>
+        public DateTime? LocalSessionStartTime => _sessionStartTime;
+
+        /// <summary>
+        /// Gets the current session duration measured locally (client-side).
+        /// Note: May differ from provider billing duration due to network latency,
+        /// connection establishment time, and clock differences.
+        /// </summary>
+        public TimeSpan LocalSessionDuration => _sessionStartTime.HasValue
+            ? DateTime.UtcNow - _sessionStartTime.Value
+            : TimeSpan.Zero;
+
+        /// <summary>
         /// Initializes a new instance of the <see cref="VoiceAssistant"/> class.
         /// </summary>
         /// <param name="hardwareAccess">The audio hardware access implementation.</param>
@@ -96,6 +151,7 @@ namespace Ai.Tlbx.VoiceAssistant
             _provider = provider; // Provider can be null for mic testing only
             _logAction = logAction ?? ((level, message) => { /* no-op */ });
             _chatHistory = new ChatHistoryManager();
+            _usageManager = new UsageManager();
 
             // Set up hardware logging
             _hardwareAccess.SetLogAction(_logAction);
@@ -196,7 +252,11 @@ namespace Ai.Tlbx.VoiceAssistant
                 }
                 
                 IsRecording = true;
-                
+
+                // Start session timing
+                _sessionStartTime = DateTime.UtcNow;
+                _lastUsageUpdateTime = DateTime.UtcNow;
+
                 ReportStatus("Voice assistant started and recording");
                 _logAction(LogLevel.Info, "Voice assistant started successfully");
             }
@@ -230,8 +290,13 @@ namespace Ai.Tlbx.VoiceAssistant
                 {
                     await _provider.DisconnectAsync();
                 }
+
+                // Fire final session usage update
+                FireSessionUsageUpdate(SessionUsageUpdateTrigger.SessionEnded);
+                _sessionStartTime = null;
+
                 _isInitialized = false;
-                
+
                 ReportStatus("Voice assistant stopped");
                 _logAction(LogLevel.Info, "Voice assistant stopped");
             }
@@ -444,6 +509,57 @@ namespace Ai.Tlbx.VoiceAssistant
             _logAction(LogLevel.Info, "Chat history cleared");
         }
 
+        /// <summary>
+        /// Clears all usage reports from the session.
+        /// </summary>
+        public void ClearUsageReports()
+        {
+            _usageManager.ClearReports();
+            _logAction(LogLevel.Info, "Usage reports cleared");
+        }
+
+        private void FireSessionUsageUpdate(SessionUsageUpdateTrigger trigger)
+        {
+            if (!_sessionStartTime.HasValue)
+            {
+                return;
+            }
+
+            var update = new SessionUsageUpdate
+            {
+                Trigger = trigger,
+                LocalSessionDuration = DateTime.UtcNow - _sessionStartTime.Value,
+                TotalInputTokens = _usageManager.TotalInputTokens,
+                TotalOutputTokens = _usageManager.TotalOutputTokens,
+                TotalAudioInputTokens = _usageManager.TotalAudioInputTokens,
+                TotalAudioOutputTokens = _usageManager.TotalAudioOutputTokens,
+                TotalTokens = _usageManager.TotalTokens
+            };
+
+            _lastUsageUpdateTime = DateTime.UtcNow;
+            _logAction(LogLevel.Info, $"Session usage update ({trigger}): {update.LocalSessionDuration.TotalMinutes:F1} min, {update.TotalTokens} tokens");
+
+            // Fire non-blocking on thread pool
+            if (OnSessionUsageUpdated != null)
+            {
+                System.Threading.ThreadPool.QueueUserWorkItem(_ => OnSessionUsageUpdated?.Invoke(update));
+            }
+        }
+
+        private void CheckAndFireMinuteUpdate()
+        {
+            if (!_sessionStartTime.HasValue)
+            {
+                return;
+            }
+
+            var elapsed = DateTime.UtcNow - _lastUsageUpdateTime;
+            if (elapsed >= TimeSpan.FromMinutes(1))
+            {
+                FireSessionUsageUpdate(SessionUsageUpdateTrigger.MinuteElapsed);
+            }
+        }
+
         private void WireUpProviderCallbacks()
         {
             if (_provider == null) return;
@@ -507,6 +623,17 @@ namespace Ai.Tlbx.VoiceAssistant
                     _logAction(LogLevel.Error, $"Error clearing audio queue on interruption: {ex.Message}");
                 }
             };
+
+            // Wire up usage reporting
+            _provider.OnUsageReceived = (usage) =>
+            {
+                _usageManager.AddReport(usage);
+                OnUsageReceived?.Invoke(usage);
+                _logAction(LogLevel.Info, $"Usage: {usage.TotalInputTokens} in, {usage.TotalOutputTokens} out (session total: {_usageManager.TotalTokens})");
+
+                // Also fire combined session usage update
+                FireSessionUsageUpdate(SessionUsageUpdateTrigger.TokenUsageReceived);
+            };
         }
 
         private int _audioReceivedCount = 0;
@@ -533,6 +660,9 @@ namespace Ai.Tlbx.VoiceAssistant
                     {
                         await _provider.ProcessAudioAsync(e.Base64EncodedPcm16Audio ?? "");
                     }
+
+                    // Check if a minute has elapsed since last usage update
+                    CheckAndFireMinuteUpdate();
                 }
                 else
                 {

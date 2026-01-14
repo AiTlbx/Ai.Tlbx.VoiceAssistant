@@ -85,6 +85,11 @@ namespace Ai.Tlbx.VoiceAssistant.Provider.Google
         public Action? OnInterruptDetected { get; set; }
 
         /// <summary>
+        /// Callback invoked when usage data is received from the AI provider.
+        /// </summary>
+        public Action<UsageReport>? OnUsageReceived { get; set; }
+
+        /// <summary>
         /// Initializes a new instance of the <see cref="GoogleVoiceProvider"/> class.
         /// </summary>
         /// <param name="apiKey">The Google API key. If null, will try to get from environment variable GOOGLE_API_KEY.</param>

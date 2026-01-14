@@ -309,6 +309,33 @@ Write once, run on any provider. The orchestrator handles:
 - `WeatherTool` — Mock weather (demo)
 - `CalculatorTool` — Basic math operations
 
+### Usage Tracking
+
+Track token consumption and session duration for billing and monitoring:
+
+```csharp
+_assistant.OnSessionUsageUpdated = update =>
+{
+    Console.WriteLine($"Duration: {update.LocalSessionDuration.TotalMinutes:F1} min");
+    Console.WriteLine($"Tokens: {update.TotalTokens} (audio in: {update.TotalAudioInputTokens}, audio out: {update.TotalAudioOutputTokens})");
+};
+```
+
+**Provider Token Reporting:**
+
+| Provider | Token Data | Audio Tokens | Billing Model |
+|----------|------------|--------------|---------------|
+| OpenAI | ✅ Native | ✅ `input_audio_tokens`, `output_audio_tokens` | Per token |
+| xAI | ✅ Native | ✅ Same as OpenAI (compatible API) | Per minute ($0.05/min) |
+| Google | ❌ Not yet | ❌ Coming soon (per Google) | Per token |
+
+**`SessionUsageUpdate` fires on:**
+- `TokenUsageReceived` — When the provider returns token counts (OpenAI/xAI)
+- `MinuteElapsed` — Every minute while session is active (checked on audio events)
+- `SessionEnded` — When `StopAsync()` is called
+
+**Important:** `LocalSessionDuration` is measured client-side and may differ slightly from provider billing due to network latency and connection establishment time. For providers like **xAI that bill by connection time**, use this as an approximation — consult the provider's usage dashboard for exact billing amounts.
+
 ---
 
 ## Native Apps (Windows/Linux)
